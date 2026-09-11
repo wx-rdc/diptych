@@ -14,6 +14,7 @@ pub mod access;
 pub mod auth;
 pub mod history;
 pub mod quota;
+pub mod tasks;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -78,6 +79,8 @@ pub struct AppState {
     history: Arc<history::HistoryStore>,
     /// v2.4：文档访问凭证（匿名防盗链三选一）
     doc_access: Arc<access::DocAccessStore>,
+    /// v2.4 T5：翻译任务注册表（doc_id → CancelToken）
+    registry: Arc<tasks::TaskRegistry>,
 }
 
 impl AppState {
@@ -105,6 +108,7 @@ impl AppState {
             require_login: false,
             history: Arc::new(history::HistoryStore::open_in_memory().expect("历史内存库初始化失败")),
             doc_access: Arc::new(access::DocAccessStore::open_in_memory().expect("访问凭证内存库初始化失败")),
+            registry: Arc::new(tasks::TaskRegistry::new()),
         }
     }
 
@@ -621,39 +625,53 @@ async fn parse_upload_handler(state: AppState, req: axum::extract::Request) -> R
     parse_from_path(&state, saved, &parser, &headers, Some(name.as_str())).await
 }
 
-/// 匿名配额预检：PDF 在解析前用真实页数判断（保护 MinerU 云端额度不被超限请求消耗）
-fn anon_precheck(
-    state: &AppState,
-    ip: Option<&str>,
-    path: &std::path::Path,
-) -> Result<(), Box<Response>> {
-    let Some(ip) = ip else { return Ok(()) };
-    if matches!(detect_file_type(path), Ok(FileType::Pdf)) {
-        if let Ok(pages) = geminus_core::pdf::count_pages(path) {
-            if state.quota.would_exceed(ip, pages as i64) {
-                let used = state.quota.used_pages(ip);
-                return Err(Box::new(err_response(
-                    StatusCode::TOO_MANY_REQUESTS,
-                    format!(
-                        "未登录用户最多查看并翻译 {} 页（当前已用 {} 页）。请登录后继续使用。",
-                        state.quota.limit(),
-                        used
-                    ),
-                )));
-            }
-        }
-    }
-    Ok(())
+/// v2.4：预检超限响应（402 + 结构化字段，前端 QuotaExceededCard 直接消费）
+fn quota_402(state: &AppState, ip: &str, required: i64) -> Response {
+    let limit = state.quota.limit();
+    let used = state.quota.used_pages(ip);
+    (
+        StatusCode::PAYMENT_REQUIRED,
+        Json(json!({
+            "error": format!("游客最多可翻译 {limit} 页（剩余 {} 页，本文件需 {required} 页）。登录后不限量使用。", (limit - used).max(0)),
+            "limit": limit,
+            "used": used,
+            "required": required,
+        })),
+    )
+        .into_response()
 }
 
-/// 计费并登记哈希；Err(msg) = 超限（调用方按自身协议返回 429 JSON 或 SSE error 事件）
-fn charge_anon(state: &AppState, ip: Option<&str>, hash: &str, pages: i64) -> Result<(), String> {
-    if let Some(ip) = ip {
-        if let Err(e) = state.quota.charge(ip, hash, pages) {
-            return Err(e.message());
+/// 匿名配额预检（v2.4 三段式第 1 段）：解析前拦截，保护 MinerU 不被超限请求消耗。
+/// - PDF：真实页数（lopdf）；
+/// - DOCX：本地解析后的估算页数 ×1.2 保守上浮（防低估烧云端/LLM）。
+/// - 超限 → 402（MinerU 未调用）；通过 → 不落账（实扣在翻译循环，见 translate_handler）。
+fn anon_precheck_pages(state: &AppState, ip: Option<&str>, pages: i64) -> Option<Response> {
+    let ip = ip?;
+    if pages > 0 && state.quota.would_exceed(ip, pages) {
+        return Some(quota_402(state, ip, pages));
+    }
+    None
+}
+
+/// PDF 解析前预检（真实页数）
+fn anon_precheck_pdf(state: &AppState, ip: Option<&str>, path: &std::path::Path) -> Option<Response> {
+    let ip = ip?;
+    if matches!(detect_file_type(path), Ok(FileType::Pdf)) {
+        if let Ok(pages) = geminus_core::pdf::count_pages(path) {
+            return anon_precheck_pages(state, Some(ip), pages as i64);
         }
     }
-    Ok(())
+    None
+}
+
+/// 匿名 DOCX 预检辅助：估算页数 ×1.2 保守上浮（计划风险缓解——估算偏差兜底）
+fn docx_estimate_pages_guarded(doc: &Document) -> i64 {
+    (doc.estimated_pages() as i64 * 12 / 10).max(1)
+}
+
+/// 文件内容哈希（失败退化为 doc_id，与解析注册口径一致）
+fn hash_of(_state: &AppState, doc: &Document, path: &std::path::Path) -> String {
+    TranslationCache::file_sha256(path).unwrap_or_else(|_| doc.id.clone())
 }
 
 /// 解析主流程（两个入口共用）：quota 预检 → builtin JSON / MinerU SSE → 成功后计费注册。
@@ -679,8 +697,9 @@ async fn parse_from_path(
 
     let user = current_user(state, headers);
     let ip = if user.is_some() { None } else { client_ip(headers) };
-    if let Err(resp) = anon_precheck(state, ip.as_deref(), &path) {
-        return *resp;
+    // v2.4 预检第 1 段：PDF 真实页数拦截（DOCX 在下方本地解析后按估算复核）
+    if let Some(resp) = anon_precheck_pdf(state, ip.as_deref(), &path) {
+        return resp;
     }
     // v2.4：require_login 下匿名上传成功只回外壳（无 IR）；历史登记用的展示名
     let display_name = file_name
@@ -695,13 +714,17 @@ async fn parse_from_path(
     if !use_mineru {
         return match parse_any(&path) {
             ParseOutcome::Ok(doc, ft) => {
-                let hash = TranslationCache::file_sha256(&path).unwrap_or_else(|_| doc.id.clone());
-                let pages = state.chargeable_pages(&doc, Some(&path));
-                if let Some(msg) = charge_anon(state, ip.as_deref(), &hash, pages).err() {
-                    return err_response(StatusCode::TOO_MANY_REQUESTS, msg);
+                // v2.4 预检第 2 段：DOCX/本地 PDF 解析后按计费页数复核（不实扣——实扣在翻译循环）
+                let pages = if ft == FileType::Docx {
+                    docx_estimate_pages_guarded(&doc)
+                } else {
+                    state.chargeable_pages(&doc, Some(&path))
+                };
+                if let Some(resp) = anon_precheck_pages(state, ip.as_deref(), pages) {
+                    return resp;
                 }
                 eprintln!("[parse] {} [{}] {} 块", ft.label(), path.display(), doc.blocks.len());
-                register_doc(state, &doc, &path, &hash, user.as_deref(), &display_name);
+                register_doc(state, &doc, &path, &hash_of(state, &doc, &path), user.as_deref(), &display_name);
                 let token = issue_doc_access(state, &doc.id, ip.as_deref(), user.is_some());
                 let mut body = if anon_shell {
                     doc_shell(&doc)
@@ -782,14 +805,10 @@ async fn parse_from_path(
             let _ = stage_tx
                 .send(json!({ "stage": "cached", "message": "MinerU 解析结果缓存命中" }))
                 .await;
-            let pages = state2.chargeable_pages(&doc, Some(&path));
-            if let Some(msg) = charge_anon(&state2, ip2.as_deref(), &hash, pages).err() {
-                send_error(&tx, "ANON_QUOTA", msg).await;
-            } else {
-                register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
-                let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
-                send_done(&tx, &doc, anon_shell, &token).await;
-            }
+            // v2.4：解析不实扣（实扣在翻译循环）；预检已在解析前完成
+            register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
+            let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
+            send_done(&tx, &doc, anon_shell, &token).await;
             drop(stage_tx);
             let _ = forwarder.await;
             return;
@@ -806,14 +825,10 @@ async fn parse_from_path(
                         .await;
                     let _ = cache.put_mineru_parse(&hash, &doc, Some(&raw_root),
                         geminus_core::cache::IR_SCHEMA_VERSION);
-                    let pages = state2.chargeable_pages(&doc, Some(&path));
-                    if let Some(msg) = charge_anon(&state2, ip2.as_deref(), &hash, pages).err() {
-                        send_error(&tx, "ANON_QUOTA", msg).await;
-                    } else {
-                        register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
-                        let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
-                        send_done(&tx, &doc, anon_shell, &token).await;
-                    }
+                    // v2.4：解析不实扣（实扣在翻译循环）
+                    register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
+                    let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
+                    send_done(&tx, &doc, anon_shell, &token).await;
                     drop(stage_tx);
                     let _ = forwarder.await;
                     return;
@@ -876,14 +891,10 @@ async fn parse_from_path(
                     let _ = cache.put_mineru_parse(&h, &doc, raw_root.as_deref(),
                         geminus_core::cache::IR_SCHEMA_VERSION);
                 }
-                let pages = state2.chargeable_pages(&doc, Some(&path));
-                if let Some(msg) = charge_anon(&state2, ip2.as_deref(), &hash, pages).err() {
-                    send_error(&tx, "ANON_QUOTA", msg).await;
-                } else {
-                    register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
-                    let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
-                    send_done(&tx, &doc, anon_shell, &token).await;
-                }
+                // v2.4：解析不实扣（实扣在翻译循环）；预检已在解析前完成
+                register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
+                let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
+                send_done(&tx, &doc, anon_shell, &token).await;
             }
             None => {
                 send_error(&tx, "PARSE_FAILED", "解析失败（回退亦失败）".to_string()).await;
@@ -1095,6 +1106,25 @@ async fn history_handler(State(state): State<AppState>, headers: HeaderMap) -> R
     Json(json!({ "items": state.history.list(&user, 100, 0) })).into_response()
 }
 
+/// 预计算全文可译块数（进度 total 口径与 core translate_document 的任务收集一致）
+fn count_translatable(doc: &Document) -> u32 {
+    use geminus_core::model::Block;
+    doc.blocks
+        .iter()
+        .filter(|b| match b {
+            Block::Paragraph { content, .. } => {
+                let (s, _) = geminus_core::translate::extract_source_text(content);
+                let (slotted, _) = geminus_core::translate::math_slot::extract(&s);
+                !slotted.trim().is_empty()
+            }
+            Block::Algorithm { .. } => {
+                !geminus_core::translate::algorithm::extract_translatable_lines(b).is_empty()
+            }
+            _ => false,
+        })
+        .count() as u32
+}
+
 async fn translate_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1111,18 +1141,16 @@ async fn translate_handler(
         return err_response(StatusCode::NOT_FOUND, format!("文档不存在: {}", req.doc_id));
     };
 
-    // 匿名限流：同内容对该 IP 已计费 → 翻译不重复扣页数
-    if user.is_none() {
-        if let Some(ip) = client_ip(&headers) {
-            let hash = state.content_hash_of(&req.doc_id);
-            let pages = state.chargeable_pages(&doc, None);
-            if let Err(e) = state.quota.charge(&ip, &hash, pages) {
-                return err_response(StatusCode::TOO_MANY_REQUESTS, e.message());
-            }
+    // v2.4 T5 三段式：匿名翻译开流前置检查（剩余 ≥1 页；循环内逐批熔断）
+    let ip = if user.is_some() { None } else { client_ip(&headers) };
+    if let Some(ip) = &ip {
+        if state.quota.remaining(ip) < 1 {
+            return quota_402(&state, ip, 1);
         }
     }
 
-    // SSE 流：progress* → complete（或 error）
+    // 任务注册（同 doc 旧任务防御性取消）
+    let cancel = state.registry.register(&req.doc_id);
     let (tx, rx) = mpsc::channel::<Result<Event, std::convert::Infallible>>(64);
 
     let cfg = ApiConfig::new(state.api_base.clone(), state.api_key.clone(), state.model.clone());
@@ -1133,23 +1161,148 @@ async fn translate_handler(
     let history_user = user.clone();
     let source_lang = req.source_lang;
     let target_lang = req.target_lang;
+    let quota = state.quota.clone();
+    let quota_ip = ip.clone();
+    let hash = state.content_hash_of(&req.doc_id);
 
     tokio::spawn(async move {
-        let (progress_tx, mut progress_rx) = mpsc::channel(64);
-        let translate = tokio::spawn(async move {
-            translate_document(&doc, client, cache, progress_tx, concurrency, &source_lang, &target_lang).await
-        });
+        let grand_total = count_translatable(&doc);
+        let batches = tasks::page_batches(&doc);
+        let mut pairs: Vec<geminus_core::model::TranslatedBlock> = Vec::new();
+        let mut translated_pages: i64 = 0;
+        let mut offset: u32 = 0;
+        // 结束原因：None = 全部完成；Some = cancelled / limit_reached / error（事件已发）
+        let mut outcome: Option<&'static str> = None;
 
-        while let Some(ev) = progress_rx.recv().await {
-            let data = serde_json::to_string(&ev).unwrap_or_default();
-            let _ = tx
-                .send(Ok(Event::default().event("progress").data(data)))
-                .await;
+        'batches: for (batch_idx, batch) in batches.iter().enumerate() {
+            // 控制点 ①：显式取消（cancel 端点）
+            if cancel.is_cancelled() {
+                outcome = Some("cancelled");
+                break;
+            }
+            // 控制点 ②：SSE 客户端断开 → 自动止损（弱网闪断走重连续译，缓存秒回）
+            if tx.is_closed() {
+                cancel.cancel();
+                outcome = Some("cancelled");
+                break;
+            }
+            // 控制点 ③：匿名熔断检查点（remaining < 本批页数）
+            if let Some(ip) = quota_ip.as_deref() {
+                let remaining = quota.remaining(ip);
+                if remaining < batch.pages {
+                    let used = quota.used_pages(ip);
+                    let _ = tx
+                        .send(Ok(Event::default().event("limit_reached").data(
+                            json!({ "limit": quota.limit(), "used": used, "required": batch.pages }).to_string(),
+                        )))
+                        .await;
+                    outcome = Some("limit_reached");
+                    break 'batches;
+                }
+            }
+
+            // 子文档（当前批）：块区间切片，缓存/资源全量共享
+            let mut sub = doc.clone();
+            sub.blocks = doc.blocks[batch.from..batch.to].to_vec();
+            let (ptx, mut prx) = mpsc::channel(64);
+            let sub_arc = sub.clone();
+            let client2 = client.clone();
+            let cache2 = cache.clone();
+            let sl = source_lang.clone();
+            let tl = target_lang.clone();
+            let translate = tokio::spawn(async move {
+                translate_document(&sub_arc, client2, cache2, ptx, concurrency, &sl, &tl).await
+            });
+
+            // 批内进度转发（current 偏移改写 + 全文 total）+ 取消监听；
+            // 同时统计批内缓存命中数（全命中批免扣——「缓存秒回不扣配额」）
+            let mut batch_current: u32 = 0;
+            let mut batch_task_total: u32 = 0;
+            let mut batch_cached: u32 = 0;
+            let mut aborted = false;
+            loop {
+                tokio::select! {
+                    _ = cancel.cancelled() => { aborted = true; break; }
+                    ev = prx.recv() => {
+                        let Some(mut p) = ev else { break };
+                        if p.current > batch_current {
+                            batch_current = p.current;
+                        }
+                        if p.total > batch_task_total {
+                            batch_task_total = p.total;
+                        }
+                        if matches!(p.status, geminus_core::model::ProgressStatus::Cached) {
+                            batch_cached += 1;
+                        }
+                        p.current += offset;
+                        p.total = grand_total;
+                        let data = serde_json::to_string(&p).unwrap_or_default();
+                        if tx.send(Ok(Event::default().event("progress").data(data))).await.is_err() {
+                            cancel.cancel();
+                            aborted = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if aborted {
+                // 丢弃当前批（已完成块的译文已入缓存——断点续传秒回不扣配额）
+                translate.abort();
+                outcome = Some("cancelled");
+                break;
+            }
+            let result = match translate.await {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx
+                        .send(Ok(Event::default()
+                            .event("error")
+                            .data(json!({ "message": e.to_string() }).to_string())))
+                        .await;
+                    outcome = Some("error");
+                    break;
+                }
+            };
+            offset += batch_current;
+            translated_pages += batch.pages;
+            // 匿名实扣（三段式第 2 段）：
+            // - 本批全部可译块缓存命中（零 LLM 调用）→ 免费秒回；
+            // - 其余批：事务扣本批页数，(ip, hash, batch) 幂等（断点续传不重复扣）
+            let all_cached = batch_task_total > 0 && batch_cached >= batch_task_total;
+            if let Some(ip) = quota_ip.as_deref() {
+                if !all_cached {
+                    if let Err(e) = quota.commit_chunk(ip, &hash, batch_idx as i64, batch.pages) {
+                        // 并发下他人恰好用尽额度：已译并入（progress 已流出），按熔断收口
+                        pairs.extend(result.pairs);
+                        let _ = tx
+                            .send(Ok(Event::default().event("limit_reached").data(
+                                json!({ "limit": e.limit, "used": e.used, "required": batch.pages }).to_string(),
+                            )))
+                            .await;
+                        outcome = Some("limit_reached");
+                        break;
+                    }
+                }
+            }
+            pairs.extend(result.pairs);
         }
 
-        match translate.await {
-            Ok(result) => {
-                // 内存留存译文（对齐审计 /api/debug/audit 用）+ 历史状态推进（v2.4 T2）
+        // finally：任务注册表移除（防泄漏——单测断言 registry 清空）
+        state_t.registry.remove(&doc.id, &cancel);
+
+        match outcome {
+            Some("cancelled") => {
+                let _ = tx
+                    .send(Ok(Event::default().event("cancelled").data(
+                        json!({ "translated_pages": translated_pages }).to_string(),
+                    )))
+                    .await;
+            }
+            Some("limit_reached") | Some("error") => { /* 事件已发 */ }
+            Some(_) => unreachable!("outcome 只有三种值"),
+            None => {
+                // 完成：内存留存译文（对齐审计 /api/debug/audit 用）+ 历史状态推进（v2.4 T2）
+                let result = TranslatedDocument { doc_id: doc.id.clone(), pairs };
                 state_t
                     .translations
                     .lock()
@@ -1163,18 +1316,32 @@ async fn translate_handler(
                     .send(Ok(Event::default().event("complete").data(data)))
                     .await;
             }
-            Err(e) => {
-                let _ = tx
-                    .send(Ok(Event::default()
-                        .event("error")
-                        .data(json!({ "message": e.to_string() }).to_string())))
-                    .await;
-            }
         }
     });
 
     let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
     Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
+}
+
+/// v2.4 T5：取消进行中的翻译任务（三选一校验同查看；?token= 供匿名持有者）
+async fn translate_cancel_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+    Path(doc_id): Path<String>,
+) -> Response {
+    if let Some(resp) =
+        doc_access_guard(&state, &headers, &doc_id, params.get("token").map(String::as_str))
+    {
+        return resp;
+    }
+    match state.registry.get(&doc_id) {
+        Some(token) => {
+            token.cancel();
+            Json(json!({ "cancelled": true, "doc_id": doc_id })).into_response()
+        }
+        None => err_response(StatusCode::NOT_FOUND, "该文档当前没有进行中的翻译任务"),
+    }
 }
 
 async fn resource_handler(
@@ -1463,6 +1630,7 @@ pub fn build_app(state: AppState) -> Router {
         .route("/api/auth/me", get(me_handler))
         .route("/api/parse", post(parse_docx_handler))
         .route("/api/translate", post(translate_handler))
+        .route("/api/translate/:doc_id/cancel", post(translate_cancel_handler))
         .route("/api/translate/paragraph", post(translate_paragraph_handler))
         .route("/api/documents/:doc_id", get(get_document_handler))
         .route("/api/history", get(history_handler))

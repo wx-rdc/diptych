@@ -139,7 +139,7 @@ async fn translate_streams_sse_progress_then_complete() {
         .unwrap();
     assert_eq!(resp.status(), 200);
     let doc: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    let doc_id = doc["id"].as_str().unwrap().to_string();
+    let doc_id = doc["id"].as_str().unwrap();
     let block_count = doc["blocks"].as_array().unwrap().len();
 
     // 2. translate → SSE
@@ -224,7 +224,7 @@ async fn resource_returns_binary() {
         .await
         .unwrap();
     let doc: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    let doc_id = doc["id"].as_str().unwrap().to_string();
+    let doc_id = doc["id"].as_str().unwrap();
 
     // 找一个 image 资源
     let rid = doc["resources"]
@@ -578,7 +578,7 @@ async fn parse_mineru_streams_progress_and_done() {
     assert!(stages.iter().any(|s| s == "parsing"), "{stages:?}");
     assert!(stages.iter().any(|s| s == "merging"), "{stages:?}");
     // 文档已注册：doc_id 可用于 /api/translate
-    let doc_id = doc["id"].as_str().unwrap().to_string();
+    let doc_id = doc["id"].as_str().unwrap();
     assert!(!doc_id.is_empty());
 }
 
@@ -645,7 +645,7 @@ async fn coverage_endpoint_reports_after_mineru_parse() {
     let events = collect_sse_events(resp).await;
     let done = events.iter().find(|(n, _)| n == "done").unwrap().1.clone();
     let doc: serde_json::Value = serde_json::from_str(&done).unwrap();
-    let doc_id = doc["id"].as_str().unwrap().to_string();
+    let doc_id = doc["id"].as_str().unwrap();
 
     // raw 已持久化（mock 输出为 v1 格式 → 全 text 条目，审计零违规）
     let resp = app
@@ -800,7 +800,7 @@ async fn original_pdf_served_after_parse() {
         .await
         .unwrap();
     let doc: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    let doc_id = doc["id"].as_str().unwrap().to_string();
+    let doc_id = doc["id"].as_str().unwrap();
 
     let resp = app
         .oneshot(
@@ -1050,17 +1050,15 @@ async fn login_bruteforce_throttled() {
 #[tokio::test]
 async fn anon_quota_charges_pages_and_blocks() {
     use geminus_server::quota::QuotaStore;
-    // 限额 1：simple.pdf（1 页）解析后即满——后续 large/two_column 预检 429 的前提
+    // v2.4 三段式：解析仅预检不扣（保护 MinerU）；实扣在翻译循环逐批进行。
+    // 限额 1：simple.pdf（1 页）翻译后满额 → 后续解析预检 402。
     let quota = QuotaStore::open_in_memory(1).unwrap();
     let cache = Arc::new(TranslationCache::open_in_memory().unwrap());
     let app = build_app(
         AppState::new(cache, ApiConfig::new("http://unused", "k", "m"), 3).with_quota(quota),
     );
 
-    // 匿名（X-Real-IP）解析 1 页 simple.pdf → 计 1 页
-    let (status, v) = parse_file(&app, &pdf_fixture("simple.pdf").to_string_lossy()).await;
-    assert_eq!(status, 200, "{v}");
-    // 注意：parse_file 不带代理头（本地直连）→ 不计费；改用带 X-Real-IP 的请求
+    // 匿名（X-Real-IP）解析 1 页 simple.pdf → 200（预检通过，不扣）
     let resp = post_json(
         &app,
         "/api/parse",
@@ -1070,20 +1068,20 @@ async fn anon_quota_charges_pages_and_blocks() {
     .await;
     assert_eq!(resp.status(), 200);
     let doc: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    let doc_id = doc["id"].as_str().unwrap().to_string();
+    let _doc_id = doc["id"].as_str().unwrap();
 
-    // 同 IP 翻译同一文档 → 幂等不再扣页（若重复扣会 429）
+    // 同 IP 再次解析同文档 → 仍 200（解析始终免费，只受页数预检约束）
     let resp = post_json(
         &app,
-        "/api/translate",
-        serde_json::json!({ "doc_id": doc_id }),
+        "/api/parse",
+        serde_json::json!({ "file_path": pdf_fixture("simple.pdf").to_string_lossy(), "parser": "builtin" }),
         &[("x-real-ip", "203.0.113.1")],
     )
     .await;
-    assert_eq!(resp.status(), 200, "同文档翻译不应重复计费");
+    assert_eq!(resp.status(), 200, "解析不实扣，重复解析不受已用额度影响");
     drop(body_string(resp).await);
 
-    // 再解析 100 页 large.pdf → 预检超限 → 429（不消耗 MinerU/解析资源）
+    // 已用满 0 页时解析 100 页 large.pdf → 预检 402（不消耗 MinerU/解析资源）
     let resp = post_json(
         &app,
         "/api/parse",
@@ -1091,19 +1089,10 @@ async fn anon_quota_charges_pages_and_blocks() {
         &[("x-real-ip", "203.0.113.1")],
     )
     .await;
-    assert_eq!(resp.status(), 429);
+    assert_eq!(resp.status(), 402, "超出剩余额度的解析预检 402");
     let v: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    assert!(v["error"].as_str().unwrap().contains("请登录"));
-
-    // 已用满额度后再请求新文档 → 429
-    let resp = post_json(
-        &app,
-        "/api/parse",
-        serde_json::json!({ "file_path": pdf_fixture("two_column.pdf").to_string_lossy(), "parser": "builtin" }),
-        &[("x-real-ip", "203.0.113.1")],
-    )
-    .await;
-    assert_eq!(resp.status(), 429);
+    assert_eq!(v["limit"].as_i64(), Some(1), "结构化字段 limit");
+    assert_eq!(v["required"].as_i64(), Some(100), "结构化字段 required");
 
     // 其他 IP 不受影响（fresh 额度解析 1 页 simple.pdf）；登录用户不受限（见 logged_in_user_unlimited）
     let resp = post_json(
@@ -1114,6 +1103,8 @@ async fn anon_quota_charges_pages_and_blocks() {
     )
     .await;
     assert_eq!(resp.status(), 200);
+    let doc: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
+    let _ = doc["id"].as_str().unwrap(); // 可继续翻译（实扣路径见 translate_control 集成测试）
 }
 
 #[tokio::test]
@@ -1232,7 +1223,7 @@ fn multipart_body(boundary: &str, filename: &str, bytes: &[u8]) -> Vec<u8> {
 
 #[tokio::test]
 async fn multipart_upload_anon_quota_precheck() {
-    // 公网语义：匿名（X-Real-IP）上传超限大文件 → 预检 429；小文件 → 200 计费
+    // 公网语义（v2.4）：匿名（X-Real-IP）上传超限大文件 → 预检 402；小文件 → 200
     use geminus_server::quota::QuotaStore;
     let quota = QuotaStore::open_in_memory(5).unwrap();
     let cache = Arc::new(TranslationCache::open_in_memory().unwrap());
@@ -1241,7 +1232,7 @@ async fn multipart_upload_anon_quota_precheck() {
     );
     let boundary = "----geminus-test-boundary";
 
-    // 100 页 large.pdf 匿名上传 → 429（预检发生在解析与 MinerU 调用之前）
+    // 100 页 large.pdf 匿名上传 → 402（预检发生在解析与 MinerU 调用之前）
     let body = multipart_body(
         boundary,
         "large.pdf",
@@ -1260,9 +1251,10 @@ async fn multipart_upload_anon_quota_precheck() {
         )
         .await
         .unwrap();
-    assert_eq!(resp.status(), 429, "匿名上传超限 PDF 应预检 429");
+    assert_eq!(resp.status(), 402, "匿名上传超限 PDF 应预检 402");
     let v: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    assert!(v["error"].as_str().unwrap().contains("请登录"));
+    assert!(v["error"].as_str().unwrap().contains("登录"), "402 文案含登录引导");
+    assert_eq!(v["required"].as_i64(), Some(100), "结构化字段 required");
 
     // 1 页 simple.pdf 匿名上传 → 200
     let body = multipart_body(
