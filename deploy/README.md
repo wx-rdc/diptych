@@ -5,7 +5,7 @@
 | 文件 | 用途 |
 |------|------|
 | `geminus-server.service` | systemd unit（EnvironmentFile → `/opt/geminus/config/geminus.env`） |
-| `nginx-geminus.conf.template` | nginx 站点模板（80/443 server，占位符 `{{SERVER_NAME}}` 等） |
+| `nginx-geminus.conf.template` | nginx 站点模板（80/443 server + ACME 挑战 location，certbot webroot；占位符 `{{SERVER_NAME}}` / `{{CERT_PATH}}` / `{{KEY_PATH}}`） |
 | `geminus-locations.conf` | 公共 location 片段：静态长缓存（`/assets/` 显式全量 types 根治 `.mjs` MIME，v2.3 P0）+ `/api/` 反代（SSE 关缓冲、10min 超时、220m 上传、X-Real-IP 覆盖式注入） |
 | `package.sh` | 本地 release 构建 + 前端构建 → `dist/geminus-release-<tag>.tar.gz` |
 | `smoke.sh` | 部署后冒烟：健康/静态/登录/匿名限流/上传/SSE + 静态资产完整性（index 引用资产 200 + `.mjs` JS MIME，`PUBLIC_BASE` 提供时经公网校验） |
@@ -55,15 +55,57 @@ scp config/users.json user@your-server:/opt/geminus/config/users.json
 scp .env.local user@your-server:/opt/geminus/config/geminus.env   # 再按 .env.example 补 GEMINUS_* 项
 ssh user@your-server 'sudo chmod 600 /opt/geminus/config/geminus.env && sudo chown geminus:geminus /opt/geminus/config/*'
 
-# systemd + nginx
+# systemd + nginx（首次先以 HTTP-only 引导上线：80 块含 ACME 挑战 location，
+# 供下一步 certbot webroot 签发；证书就绪后再切换完整 80+443 模板，见下节）
 sudo cp deploy/geminus-server.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now geminus-server
 sudo cp deploy/geminus-locations.conf /etc/nginx/snippets/
-sudo sed -e 's/{{SERVER_NAME}}/_/' deploy/nginx-geminus.conf.template | sudo tee /etc/nginx/sites-available/geminus
+sudo tee /etc/nginx/sites-available/geminus >/dev/null <<'NGINX'
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name <your-domain> _;
+
+    location /.well-known/acme-challenge/ { root /var/www/html; }
+
+    include /etc/nginx/snippets/geminus-locations.conf;
+}
+NGINX
 sudo ln -sfn /etc/nginx/sites-available/geminus /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx
 
 # uploads 清理 cron（每小时）
 (crontab -l 2>/dev/null; echo '0 * * * * /opt/geminus/current/deploy/cleanup_uploads.sh /opt/geminus/uploads') | crontab -
 ```
+
+## 启用 HTTPS（certbot webroot + 自动续期）
+
+前置：域名 A 记录已指向服务器公网 IP，80/443 端口可公网访问。
+
+```bash
+# 1) 签发证书（webroot 复用引导配置的 ACME location；deploy-hook 在续期后自动 reload nginx）
+sudo certbot certonly --webroot -w /var/www/html -d <your-domain> --deploy-hook "systemctl reload nginx"
+
+# 2) 切换为完整 80+443 模板（填充三个占位符）
+sudo sed -e 's/{{SERVER_NAME}}/<your-domain>/' \
+         -e 's|{{CERT_PATH}}|/etc/letsencrypt/live/<your-domain>/fullchain.pem|' \
+         -e 's|{{KEY_PATH}}|/etc/letsencrypt/live/<your-domain>/privkey.pem|' \
+         deploy/nginx-geminus.conf.template | sudo tee /etc/nginx/sites-available/geminus
+sudo nginx -t && sudo systemctl reload nginx
+
+# 3) HTTPS 下会话 Cookie 加 Secure 标记
+echo 'GEMINUS_COOKIE_SECURE=1' | sudo tee -a /opt/geminus/config/geminus.env
+sudo systemctl restart geminus-server
+
+# 4) 验收 + 续期演练
+curl -sI http://<your-domain>/ | grep -i location    # 期望 301 → https
+BASE=https://<your-domain> USERS_FILE=.secrets/preset_users.txt deploy/smoke.sh
+sudo certbot renew --dry-run
+```
+
+自动续期由 certbot 包自带的 `certbot.timer`（systemd timer，每日两次）触发，无需额外 cron。
+**踩坑提示**：模板中 ACME 挑战 location 必须同时存在于 80 与 443 两个 server 块——
+80 块的 server 级 `if return 301` 在 location 匹配之前执行，LE 的 HTTP-01 校验会跟随
+301 到 HTTPS，挑战文件最终由 443 块的 webroot 命中；只写在 80 块时
+`certbot renew --dry-run` 会报 404（生产实测）。
 
 ## 安全要点（加固要点）
 

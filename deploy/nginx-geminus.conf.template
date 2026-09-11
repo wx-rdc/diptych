@@ -1,36 +1,54 @@
 # geminus nginx 站点模板（部署到 /etc/nginx/sites-available/geminus，软链到 sites-enabled）
-# 占位符：{{SERVER_NAME}}（域名或 _）、{{CERT_PATH}}/{{KEY_PATH}}（TLS 证书；HTTP-only 验证期见文末说明）
+# 占位符：{{SERVER_NAME}}（域名）、{{CERT_PATH}}/{{KEY_PATH}}（certbot 证书路径）
 #
-# 关键点（docs/deploy_plan.md 阶段 2.6）：
-# 1. /api/ 反代到 127.0.0.1 内网端口，proxy_buffering off 全局关闭——SSE 进度流
-#    （/api/parse、/api/translate）绝不能被 nginx 缓冲，否则前端进度卡死（验收 4.2）；
+# 首次启用 HTTPS 的顺序（详见 deploy/README.md「启用 HTTPS」）：
+#   1) 先上仅含 80 server 块的配置（含 ACME 挑战 location），nginx -t && reload
+#   2) certbot certonly --webroot -w /var/www/html -d {{SERVER_NAME}} --deploy-hook "systemctl reload nginx"
+#   3) sed 填充占位符后覆盖本文件，nginx -t && reload
+#   4) 后端 env 加 GEMINUS_COOKIE_SECURE=1 并重启 geminus-server
+#
+# 关键点：
+# 1. ACME 挑战 location 必须同时出现在 80 与 443 两个 server 块——80 块的
+#    server 级 `if return 301` 在 location 匹配之前执行，LE 的 HTTP-01 校验
+#    会跟随重定向到 HTTPS，挑战文件最终由 443 块的 webroot 命中。
+#    （只写在 80 块会导致 certbot renew --dry-run 报 404，属实测踩坑。）
+# 2. /api/ 反代到 127.0.0.1 内网端口，proxy_buffering off 全局关闭——SSE 进度流
+#    （/api/parse、/api/translate）绝不能被 nginx 缓冲，否则前端进度卡死；
 #    读超时 ≥10min 对齐大文件解析与长翻译。
-# 2. client_max_body_size 与后端 GEMINUS_MAX_UPLOAD_MB 对齐（略放宽至 220m）。
-# 3. X-Real-IP 必须覆盖式注入（$remote_addr）——后端以此识别真实客户端 IP 做匿名限流；
+# 3. client_max_body_size 与后端 GEMINUS_MAX_UPLOAD_MB 对齐（略放宽至 220m）。
+# 4. X-Real-IP 必须覆盖式注入（$remote_addr）——后端以此识别真实客户端 IP 做匿名限流；
 #    不能用 $proxy_add_x_forwarded_for（会保留客户端伪造的首段）。
 
 server {
-    listen 80;
-    server_name {{SERVER_NAME}};
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name {{SERVER_NAME}} _;
 
-    # ACME 挑战放行（certbot webroot 模式）
     location /.well-known/acme-challenge/ {
         root /var/www/html;
     }
 
-    # 验证期（无 TLS 证书时）直接服务；启用 TLS 后改为重定向：
-    # return 301 https://$host$request_uri;
+    # 仅对本站域名跳转；其余 Host（含 IP 直扫）保持原 HTTP 服务
+    if ($host = {{SERVER_NAME}}) {
+        return 301 https://$host$request_uri;
+    }
+
     include /etc/nginx/snippets/geminus-locations.conf;
 }
 
 server {
     listen 443 ssl http2;
+    listen [::]:443 ssl;
     server_name {{SERVER_NAME}};
 
     ssl_certificate     {{CERT_PATH}};
     ssl_certificate_key {{KEY_PATH}};
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_session_cache shared:SSL:10m;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
 
     include /etc/nginx/snippets/geminus-locations.conf;
 }

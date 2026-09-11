@@ -10,7 +10,7 @@
 [![Release](https://img.shields.io/github/v/release/wx-rdc/diptych?label=release)](https://github.com/wx-rdc/diptych/releases)
 [![Parsed by MinerU](https://img.shields.io/badge/parsed%20by-MinerU%20VLM-blueviolet)](https://mineru.net)
 [![Translated by LLM](https://img.shields.io/badge/translated%20by-DeepSeek%20%7C%20OpenAI--compatible-blue)](#-translation-pipeline)
-[![Demo](https://img.shields.io/badge/demo-live-2ea44f?logo=googlechrome&logoColor=white)](http://x.wx-rdc.top)
+[![Demo](https://img.shields.io/badge/demo-live-2ea44f?logo=googlechrome&logoColor=white)](https://x.wx-rdc.top)
 
 **Diptych（双联画）** 是一款**版式保留、左右对照**的 PDF / DOCX 双语翻译阅读器：
 公式、表格、算法块与参考文献原样呈现，段落级同步高亮，由大模型驱动翻译。
