@@ -10,6 +10,7 @@
 //! - 限流：未登录按 IP 累计「查看+翻译」5 页（SQLite 持久）；登录用户不受限
 //! - 本地路径解析默认禁用（GEMINUS_ALLOW_LOCAL_PATH=1 开启，供本地开发）
 
+pub mod access;
 pub mod auth;
 pub mod history;
 pub mod quota;
@@ -70,10 +71,13 @@ pub struct AppState {
     upload_limit: usize,
     /// 是否允许 JSON file_path 分支（本地开发用；生产默认禁用）
     allow_local_path: bool,
-    /// v2.4：权限收口（查看/翻译强制登录；上传仍匿名+配额）
+    /// v2.4：权限收口（查看/翻译强制登录；上传仍匿名+配额）。
+    /// v2.4 新迭代默认关闭：匿名在配额内开放试用（access_token 防盗链，见 access.rs）
     require_login: bool,
     /// v2.4：用户文档历史
     history: Arc<history::HistoryStore>,
+    /// v2.4：文档访问凭证（匿名防盗链三选一）
+    doc_access: Arc<access::DocAccessStore>,
 }
 
 impl AppState {
@@ -100,6 +104,7 @@ impl AppState {
             allow_local_path: true,
             require_login: false,
             history: Arc::new(history::HistoryStore::open_in_memory().expect("历史内存库初始化失败")),
+            doc_access: Arc::new(access::DocAccessStore::open_in_memory().expect("访问凭证内存库初始化失败")),
         }
     }
 
@@ -145,6 +150,12 @@ impl AppState {
     /// 测试用：查看/翻译强制登录
     pub fn with_require_login(mut self, require: bool) -> Self {
         self.require_login = require;
+        self
+    }
+
+    /// 测试用：注入文档访问凭证仓
+    pub fn with_doc_access(mut self, store: Arc<access::DocAccessStore>) -> Self {
+        self.doc_access = store;
         self
     }
 
@@ -213,6 +224,11 @@ impl AppState {
             .unwrap_or_else(|e| panic!("历史库 {history_db} 打开失败: {e}"));
         state.require_login = env_flag("GEMINUS_REQUIRE_LOGIN");
         state.history = Arc::new(history);
+        let access_db = std::env::var("GEMINUS_ACCESS_DB")
+            .unwrap_or_else(|_| "data/doc_access.db".to_string());
+        let doc_access = access::DocAccessStore::open_at(&PathBuf::from(&access_db))
+            .unwrap_or_else(|e| panic!("访问凭证库 {access_db} 打开失败: {e}"));
+        state.doc_access = Arc::new(doc_access);
         *state.mineru.lock().unwrap() = MineruClient::from_env();
         state
     }
@@ -307,6 +323,37 @@ fn require_login_guard(state: &AppState, headers: &HeaderMap) -> Option<Response
         return Some(err_response(StatusCode::UNAUTHORIZED, "请登录后查看与翻译文档"));
     }
     None
+}
+
+/// v2.4 新迭代 T1：文档防盗链「三选一」校验（require_login 关闭时生效）：
+/// ① 登录 Session 且历史关联该文档 ② access_token 匹配 ③ 上传者 IP 匹配。
+/// 直连本机（无代理头）= 本地开发流量 → 放行（与匿名配额口径一致）。
+/// 返回 Some(resp) = 拦截（403）；None = 放行。
+fn doc_access_guard(
+    state: &AppState,
+    headers: &HeaderMap,
+    doc_id: &str,
+    token: Option<&str>,
+) -> Option<Response> {
+    if let Some(resp) = require_login_guard(state, headers) {
+        return Some(resp);
+    }
+    // ① 登录用户（历史关联：自己上传过，或历史仓可回源）
+    if current_user(state, headers).is_some() {
+        return None;
+    }
+    // ② token 匹配
+    if token.is_some_and(|t| state.doc_access.verify_token(doc_id, t)) {
+        return None;
+    }
+    // ③ 上传者 IP 匹配；直连本机（None）放行
+    let Some(ip) = client_ip(headers) else {
+        return None;
+    };
+    if state.doc_access.uploader_ip(doc_id).as_deref() == Some(ip.as_str()) {
+        return None;
+    }
+    Some(err_response(StatusCode::FORBIDDEN, "无权访问该文档（请登录，或使用上传时的浏览器打开）"))
 }
 
 /// 匿名上传成功的外壳响应（不含 IR：blocks/resources/render_meta/pdf_meta）
@@ -405,6 +452,9 @@ struct TranslateRequest {
     source_lang: String,
     #[serde(default = "default_target_lang")]
     target_lang: String,
+    /// v2.4 T1：匿名文档访问凭证（上传响应下发）
+    #[serde(default)]
+    access_token: Option<String>,
 }
 
 fn default_source_lang() -> String {
@@ -654,11 +704,13 @@ async fn parse_from_path(
                 }
                 eprintln!("[parse] {} [{}] {} 块", ft.label(), path.display(), doc.blocks.len());
                 register_doc(state, &doc, &path, &hash, user.as_deref(), &display_name);
-                let body = if anon_shell {
+                let token = issue_doc_access(state, &doc.id, ip.as_deref(), user.is_some());
+                let mut body = if anon_shell {
                     doc_shell(&doc)
                 } else {
                     serde_json::to_value(&doc).unwrap_or_default()
                 };
+                body["access_token"] = json!(token);
                 (StatusCode::OK, Json(body)).into_response()
             }
             ParseOutcome::Unsupported(msg) => err_response(StatusCode::BAD_REQUEST, msg),
@@ -703,13 +755,19 @@ async fn parse_from_path(
                     .data(json!({ "code": code, "message": message }).to_string())))
                 .await;
         }
-        async fn send_done(tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>, doc: &Document, shell: bool) {
-            let data = if shell {
-                doc_shell(doc).to_string()
+        async fn send_done(
+            tx: &mpsc::Sender<Result<Event, std::convert::Infallible>>,
+            doc: &Document,
+            shell: bool,
+            token: &str,
+        ) {
+            let mut data = if shell {
+                doc_shell(doc)
             } else {
-                serde_json::to_string(doc).unwrap_or_default()
+                serde_json::to_value(doc).unwrap_or_default()
             };
-            let _ = tx.send(Ok(Event::default().event("done").data(data))).await;
+            data["access_token"] = json!(token);
+            let _ = tx.send(Ok(Event::default().event("done").data(data.to_string()))).await;
         }
 
         // 结果缓存：文件哈希命中 → 直接 done
@@ -731,7 +789,8 @@ async fn parse_from_path(
                 send_error(&tx, "ANON_QUOTA", msg).await;
             } else {
                 register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
-                send_done(&tx, &doc, anon_shell).await;
+                let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
+                send_done(&tx, &doc, anon_shell, &token).await;
             }
             drop(stage_tx);
             let _ = forwarder.await;
@@ -754,7 +813,8 @@ async fn parse_from_path(
                         send_error(&tx, "ANON_QUOTA", msg).await;
                     } else {
                         register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
-                        send_done(&tx, &doc, anon_shell).await;
+                        let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
+                        send_done(&tx, &doc, anon_shell, &token).await;
                     }
                     drop(stage_tx);
                     let _ = forwarder.await;
@@ -823,7 +883,8 @@ async fn parse_from_path(
                     send_error(&tx, "ANON_QUOTA", msg).await;
                 } else {
                     register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
-                    send_done(&tx, &doc, anon_shell).await;
+                    let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
+                    send_done(&tx, &doc, anon_shell, &token).await;
                 }
             }
             None => {
@@ -881,6 +942,15 @@ fn file_stem(path: &std::path::Path) -> String {
         .and_then(|s| s.to_str())
         .unwrap_or("doc")
         .to_string()
+}
+
+/// 新解析成功后登记访问凭证（v2.4 T1）：
+/// - 公网匿名上传 → token + uploader_ip + 匿名标记（24h TTL 清理范围）；
+/// - 登录上传 → 仅 token（Session 即访问权）；
+/// - 本地开发（无代理头）→ 仅 token（直连放行，不参与 TTL）。
+fn issue_doc_access(state: &AppState, doc_id: &str, ip: Option<&str>, logged_in: bool) -> String {
+    let is_anon = !logged_in && ip.is_some();
+    state.doc_access.issue(doc_id, ip, is_anon)
 }
 
 /// v2.2 T1：把 MinerU 在线解析的 work_dir（chunk_NN 解压目录）持久化到
@@ -988,9 +1058,11 @@ async fn debug_coverage_handler(
 async fn get_document_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
     Path(doc_id): Path<String>,
 ) -> Response {
-    if let Some(resp) = require_login_guard(&state, &headers) {
+    // v2.4 T1：三选一防盗链（?token= 或 Session 或 uploader_ip）
+    if let Some(resp) = doc_access_guard(&state, &headers, &doc_id, params.get("token").map(String::as_str)) {
         return resp;
     }
     if let Some(doc) = state.get_doc(&doc_id) {
@@ -1030,7 +1102,10 @@ async fn translate_handler(
     headers: HeaderMap,
     Json(req): Json<TranslateRequest>,
 ) -> Response {
-    if let Some(resp) = require_login_guard(&state, &headers) {
+    // v2.4 T1：三选一防盗链（body access_token / Session / uploader_ip）
+    if let Some(resp) =
+        doc_access_guard(&state, &headers, &req.doc_id, req.access_token.as_deref())
+    {
         return resp;
     }
     let user = current_user(&state, &headers);
@@ -1107,9 +1182,11 @@ async fn translate_handler(
 async fn resource_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
     Path((doc_id, rid)): Path<(String, String)>,
 ) -> Response {
-    if let Some(resp) = require_login_guard(&state, &headers) {
+    // v2.4 T1：资源直链同样三选一防盗链（?token=）
+    if let Some(resp) = doc_access_guard(&state, &headers, &doc_id, params.get("token").map(String::as_str)) {
         return resp;
     }
     let Some(doc) = state.get_doc(&doc_id) else {
@@ -1139,9 +1216,11 @@ async fn resource_handler(
 async fn original_pdf_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
     Path(doc_id): Path<String>,
 ) -> Response {
-    if let Some(resp) = require_login_guard(&state, &headers) {
+    // v2.4 T1：原始文件直链同样三选一防盗链（?token=）
+    if let Some(resp) = doc_access_guard(&state, &headers, &doc_id, params.get("token").map(String::as_str)) {
         return resp;
     }
     let Some(path) = state.original_pdfs.lock().unwrap().get(&doc_id).cloned() else {
@@ -1211,6 +1290,9 @@ struct TranslateParagraphRequest {
     source_lang: String,
     #[serde(default = "default_target_lang")]
     target_lang: String,
+    /// v2.4 T1：匿名文档访问凭证
+    #[serde(default)]
+    access_token: Option<String>,
 }
 
 /// 单段重译（v2.1 T7.2）：绕过读缓存强制重译 → 覆盖写缓存 → 返回重建块（JSON）。
@@ -1268,7 +1350,10 @@ async fn translate_paragraph_handler(
     headers: HeaderMap,
     Json(req): Json<TranslateParagraphRequest>,
 ) -> Response {
-    if let Some(resp) = require_login_guard(&state, &headers) {
+    // v2.4 T1：三选一防盗链（body access_token / Session / uploader_ip）
+    if let Some(resp) =
+        doc_access_guard(&state, &headers, &req.doc_id, req.access_token.as_deref())
+    {
         return resp;
     }
     let Some(doc) = state.get_doc(&req.doc_id) else {

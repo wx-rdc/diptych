@@ -1185,7 +1185,8 @@ async fn anon_paragraph_retranslate_gated() {
         AppState::new(cache, ApiConfig::new("http://unused", "k", "m"), 3).with_quota(quota),
     );
 
-    // 匿名解析 rich.docx（本地直连，不计费）→ 文档不在该 IP 额度内 → 单段重译 429
+    // 匿名解析 rich.docx（本地直连，不计费）→ 文档不在该 IP 额度内。
+    // v2.4 T1：防盗链三选一优先于配额门控——陌生 IP 遍历 doc_id → 403（旧断言 429）
     let (status, v) = parse_file(&app, &fixture_path().to_string_lossy()).await;
     assert_eq!(status, 200);
     let doc_id = v["id"].as_str().unwrap().to_string();
@@ -1198,9 +1199,9 @@ async fn anon_paragraph_retranslate_gated() {
         &[("x-real-ip", "203.0.113.77")],
     )
     .await;
-    assert_eq!(resp.status(), 429);
+    assert_eq!(resp.status(), 403, "陌生 IP 无 token 访问他人文档 → 防盗链 403");
     let body: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    assert!(body["error"].as_str().unwrap().contains("请登录"));
+    assert!(body["error"].as_str().unwrap().contains("无权访问"));
 
     // 无代理头（本地开发）→ 不受限（过门控即验证目的；LLM 指向不可达地址，结果码不限定）
     let resp = post_json(
