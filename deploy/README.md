@@ -1,0 +1,104 @@
+# geminus 部署工件（自托管部署）
+
+目录结构：
+
+| 文件 | 用途 |
+|------|------|
+| `geminus-server.service` | systemd unit（EnvironmentFile → `/opt/geminus/config/geminus.env`） |
+| `nginx-geminus.conf.template` | nginx 站点模板（80/443 server，占位符 `{{SERVER_NAME}}` 等） |
+| `geminus-locations.conf` | 公共 location 片段：静态长缓存（`/assets/` 显式全量 types 根治 `.mjs` MIME，v2.3 P0）+ `/api/` 反代（SSE 关缓冲、10min 超时、220m 上传、X-Real-IP 覆盖式注入） |
+| `package.sh` | 本地 release 构建 + 前端构建 → `dist/geminus-release-<tag>.tar.gz` |
+| `smoke.sh` | 部署后冒烟：健康/静态/登录/匿名限流/上传/SSE + 静态资产完整性（index 引用资产 200 + `.mjs` JS MIME，`PUBLIC_BASE` 提供时经公网校验） |
+| `cleanup_uploads.sh` | uploads 过期清理（cron 调用，默认 24h） |
+
+## 发布 SOP（阶段 5）
+
+> **v2.3 起：整个发布/回滚流程已脚本化**——
+> `deploy/publish.sh <tag> [--skip-tests] [--public-base=URL]`
+> （门禁→打包→传输→切链→nginx 同步→重启→双段冒烟）。
+> 下列手工步骤保留作参考。
+
+```bash
+# 1. 本地：门禁 + 打包
+cargo test --workspace && cargo clippy --workspace -- -D warnings
+(cd app && pnpm test && pnpm build)
+deploy/package.sh v2.1-deploy-rc1
+
+# 2. 传输 + 铺开（user@your-server）
+scp dist/geminus-release-<tag>.tar.gz user@your-server:/tmp/
+ssh user@your-server '
+  set -e
+  tar -xzf /tmp/geminus-release-<tag>.tar.gz -C /opt/geminus/releases/
+  ln -sfn /opt/geminus/releases/geminus /opt/geminus/current   # 版本切换（回滚 = 指回上一版）
+  sudo systemctl restart geminus-server
+'
+
+# 3. 冒烟
+ssh user@your-server 'BASE=http://127.0.0.1:39321 /opt/geminus/current/deploy/smoke.sh'
+#（首次部署把 users.json / geminus.env 放入 /opt/geminus/config/，见下）
+```
+
+## 首次部署清单
+
+```bash
+ssh user@your-server '
+  sudo mkdir -p /opt/geminus/{releases,config,data,uploads,logs}
+  # 专用系统用户 + 目录属主（最小权限）
+  sudo useradd -r -s /usr/sbin/nologin geminus || true
+  sudo chown -R geminus:geminus /opt/geminus/{config,data,uploads,logs}
+'
+# 预设用户（明文留底在本地 .secrets/，勿传服务器以外的地方）
+python3 scripts/gen_users.py --count 3 --prefix reader
+scp config/users.json user@your-server:/opt/geminus/config/users.json
+
+# 运行环境（真实密钥；600 权限）
+scp .env.local user@your-server:/opt/geminus/config/geminus.env   # 再按 .env.example 补 GEMINUS_* 项
+ssh user@your-server 'sudo chmod 600 /opt/geminus/config/geminus.env && sudo chown geminus:geminus /opt/geminus/config/*'
+
+# systemd + nginx
+sudo cp deploy/geminus-server.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now geminus-server
+sudo cp deploy/geminus-locations.conf /etc/nginx/snippets/
+sudo sed -e 's/{{SERVER_NAME}}/_/' deploy/nginx-geminus.conf.template | sudo tee /etc/nginx/sites-available/geminus
+sudo ln -sfn /etc/nginx/sites-available/geminus /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx
+
+# uploads 清理 cron（每小时）
+(crontab -l 2>/dev/null; echo '0 * * * * /opt/geminus/current/deploy/cleanup_uploads.sh /opt/geminus/uploads') | crontab -
+```
+
+## 安全要点（加固要点）
+
+1. **预设用户登录**：`POST /api/auth/login`（PBKDF2-SHA256 600k 迭代），HttpOnly 会话 Cookie；
+   无自助注册；登录接口 10 分钟滑动窗口限速（每用户名 5 次 / 每 IP 20 次失败）。
+2. **匿名限流**：未登录按 IP 累计「查看 + 翻译」5 页（`GEMINUS_ANON_PAGE_LIMIT`），SQLite 持久；
+   同一文件（内容哈希）只计一次；PDF 在调用 MinerU 前用 lopdf 页数预检拦截；
+   单段重译仅限已计费文档且每小时 ≤30 次。登录用户不受限。
+3. **本地路径门控**：JSON `file_path` 分支默认 403（`GEMINUS_ALLOW_LOCAL_PATH=0`），公网仅
+   multipart 上传（扩展名白名单 + magic bytes + 200MB 上限 + 服务端生成存储名）。
+4. **IP 识别**：nginx 覆盖式注入 `X-Real-IP: $remote_addr`；后端仅监听 127.0.0.1。
+5. **运维端点**：`POST /api/config/mineru`（运行时改上游）需登录。
+6. **权限收口（v2.4）**：`GEMINUS_REQUIRE_LOGIN=1` 时匿名仍可上传（响应只含 doc_id 外壳，
+   不返回 IR），`GET /api/documents/:id`、`POST /api/translate`、`/api/translate/paragraph`、
+   `/api/original/:id`、`/api/resource/:id` 匿名一律 401；前端未登录点「打开/翻译」先弹登录框，
+   登录后自动续跑。本地开发保持 0（匿名 + 配额旧行为，存量 E2E 兼容）。
+7. **用户文档历史（v2.4）**：`GEMINUS_HISTORY_DB`（默认 `data/history.db`）记录登录用户上传/
+   翻译（单用户上限 100 条 FIFO）；`GET /api/history` 匿名 401；历史回载走 `GET /api/documents`
+   ——服务重启后内存丢失会按落盘 uploads 文件重解析（MinerU 缓存优先，零云端调用）。
+   已知限制：uploads 文件被 `cleanup_uploads.sh` 清理后，对应历史条目回载 404（前端提示重新上传）。
+
+## 回滚 SOP（≤5 分钟）
+
+```bash
+ssh user@your-server '
+  # current 指回上一版本目录 + restart
+  sudo ln -sfn /opt/geminus/releases/<prev-version> /opt/geminus/current
+  sudo systemctl restart geminus-server
+'
+# releases/ 保留最近 3 版，超出清理最旧
+```
+
+## 匿名额度重置（如需）
+
+```sql
+-- ssh user@your-server: sudo -u geminus sqlite3 /opt/geminus/data/auth_quota.db
+DELETE FROM anon_page_usage;  -- 或按 IP：WHERE ip = 'x.x.x.x'
+```

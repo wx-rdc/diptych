@@ -1,0 +1,492 @@
+{
+    "pdf_info": [
+        {
+            "preproc_blocks": [
+                {
+                    "bbox": [
+                        56,
+                        59,
+                        553,
+                        90
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                60,
+                                551,
+                                75
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        60,
+                                        551,
+                                        75
+                                    ],
+                                    "type": "text",
+                                    "content": "The energy momentum relation is perhaps the most famous equation in special relativity",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                76,
+                                99,
+                                90
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        76,
+                                        99,
+                                        90
+                                    ],
+                                    "type": "text",
+                                    "content": "theory.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        143,
+                        99,
+                        339,
+                        121
+                    ],
+                    "type": "interline_equation",
+                    "angle": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                143,
+                                99,
+                                339,
+                                121
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        143,
+                                        99,
+                                        339,
+                                        121
+                                    ],
+                                    "type": "interline_equation",
+                                    "content": "\\mathrm{FORMULAMARKER} E = m c ^ {2}",
+                                    "image_path": "66b5170558f089ce85f061ebbca50109f3b8591957a02352f75369e63780cd82.jpg"
+                                }
+                            ]
+                        }
+                    ],
+                    "index": 1
+                },
+                {
+                    "bbox": [
+                        56,
+                        135,
+                        480,
+                        165
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                137,
+                                479,
+                                149
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        137,
+                                        479,
+                                        149
+                                    ],
+                                    "type": "text",
+                                    "content": "A ratio of sums appears frequently in normalization layers of modern neural",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                153,
+                                135,
+                                163
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        153,
+                                        135,
+                                        163
+                                    ],
+                                    "type": "text",
+                                    "content": "architectures.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        143,
+                        180,
+                        390,
+                        198
+                    ],
+                    "type": "interline_equation",
+                    "angle": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                143,
+                                180,
+                                390,
+                                198
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        143,
+                                        180,
+                                        390,
+                                        198
+                                    ],
+                                    "type": "interline_equation",
+                                    "content": "\\text { FORMULAMARKER } (a + b) / (c + d)",
+                                    "image_path": "c8ddfa00018a4488224d1906b1535fb008f18419fac64cccdcbae0b28b75fdf5.jpg"
+                                }
+                            ]
+                        }
+                    ],
+                    "index": 3
+                },
+                {
+                    "bbox": [
+                        56,
+                        211,
+                        544,
+                        241
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 4,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                212,
+                                542,
+                                225
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        212,
+                                        542,
+                                        225
+                                    ],
+                                    "type": "text",
+                                    "content": "Both expressions above are typeset as ordinary text runs inside the portable document",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                57,
+                                226,
+                                82,
+                                241
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        57,
+                                        226,
+                                        82,
+                                        241
+                                    ],
+                                    "type": "text",
+                                    "content": "file.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ],
+            "discarded_blocks": [],
+            "page_size": [
+                612,
+                792
+            ],
+            "page_idx": 0,
+            "para_blocks": [
+                {
+                    "bbox": [
+                        56,
+                        59,
+                        553,
+                        90
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                60,
+                                551,
+                                75
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        60,
+                                        551,
+                                        75
+                                    ],
+                                    "type": "text",
+                                    "content": "The energy momentum relation is perhaps the most famous equation in special relativity",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                76,
+                                99,
+                                90
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        76,
+                                        99,
+                                        90
+                                    ],
+                                    "type": "text",
+                                    "content": "theory.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        143,
+                        99,
+                        339,
+                        121
+                    ],
+                    "type": "interline_equation",
+                    "angle": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                143,
+                                99,
+                                339,
+                                121
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        143,
+                                        99,
+                                        339,
+                                        121
+                                    ],
+                                    "type": "interline_equation",
+                                    "content": "\\mathrm{FORMULAMARKER} E = m c ^ {2}",
+                                    "image_path": "66b5170558f089ce85f061ebbca50109f3b8591957a02352f75369e63780cd82.jpg"
+                                }
+                            ]
+                        }
+                    ],
+                    "index": 1
+                },
+                {
+                    "bbox": [
+                        56,
+                        135,
+                        480,
+                        165
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                137,
+                                479,
+                                149
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        137,
+                                        479,
+                                        149
+                                    ],
+                                    "type": "text",
+                                    "content": "A ratio of sums appears frequently in normalization layers of modern neural",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                153,
+                                135,
+                                163
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        153,
+                                        135,
+                                        163
+                                    ],
+                                    "type": "text",
+                                    "content": "architectures.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        143,
+                        180,
+                        390,
+                        198
+                    ],
+                    "type": "interline_equation",
+                    "angle": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                143,
+                                180,
+                                390,
+                                198
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        143,
+                                        180,
+                                        390,
+                                        198
+                                    ],
+                                    "type": "interline_equation",
+                                    "content": "\\text { FORMULAMARKER } (a + b) / (c + d)",
+                                    "image_path": "c8ddfa00018a4488224d1906b1535fb008f18419fac64cccdcbae0b28b75fdf5.jpg"
+                                }
+                            ]
+                        }
+                    ],
+                    "index": 3
+                },
+                {
+                    "bbox": [
+                        56,
+                        211,
+                        544,
+                        241
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 4,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                212,
+                                542,
+                                225
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        212,
+                                        542,
+                                        225
+                                    ],
+                                    "type": "text",
+                                    "content": "Both expressions above are typeset as ordinary text runs inside the portable document",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                57,
+                                226,
+                                82,
+                                241
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        57,
+                                        226,
+                                        82,
+                                        241
+                                    ],
+                                    "type": "text",
+                                    "content": "file.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ]
+        }
+    ],
+    "_backend": "hybrid",
+    "_effort": "medium",
+    "_ocr_enable": false,
+    "_version_name": "3.4.4"
+}

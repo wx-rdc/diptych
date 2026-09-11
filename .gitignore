@@ -1,0 +1,33 @@
+# Rust
+/target
+**/target
+Cargo.lock.bak
+
+# Node
+node_modules/
+dist/
+*.local
+
+# runtime data
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# local configuration (secrets stay out of git)
+.env.local
+config/
+.secrets/
+
+# temp & editor files
+_local/
+/tmp
+__pycache__/
+*.pyc
+.DS_Store
+/.zcode
+
+# worktree & local runtime artifacts
+app/node_modules
+logs_dev.txt
+uploads/

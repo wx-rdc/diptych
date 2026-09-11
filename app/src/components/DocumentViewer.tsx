@@ -1,0 +1,79 @@
+import { useRef } from 'react';
+import type { Block, GDocument } from '../types';
+import BlockRenderer from './BlockRenderer';
+import Pane from './Pane';
+import { useHoverDrivenSync } from '../hooks/useHoverDrivenSync';
+
+interface Props {
+  doc: GDocument;
+  /** block_id → 译文块（null/缺失 = 未翻译，显示原文） */
+  translatedMap: Record<string, Block | null>;
+  activeId: string | null;
+  onSelect: (blockId: string) => void;
+  /** 来源文件类型（徽章显示；null 不显示） */
+  fileType?: 'docx' | 'pdf' | null;
+  originalRef?: React.RefObject<HTMLDivElement>;
+  translatedRef?: React.RefObject<HTMLDivElement>;
+  /** v2.1：翻译失败回退原文的块（右栏「未翻译」徽标） */
+  fallbackIds?: Set<string>;
+  /** v2.1：译文侧段落交互（hover 工具条） */
+  interactive?: import('./BlockRenderer').ParagraphToolbarInteractive;
+}
+
+/** 双栏对照视图：左原文 / 右译文，占位符保位。
+ * v2.4：同步由 useHoverDrivenSync 接管（Hover 主从 + 锚点居中追踪）。 */
+export default function DocumentViewer({
+  doc,
+  translatedMap,
+  activeId,
+  onSelect,
+  fileType,
+  originalRef,
+  translatedRef,
+  fallbackIds,
+  interactive,
+}: Props) {
+  const originalInner = useRef<HTMLDivElement>(null);
+  const translatedInner = useRef<HTMLDivElement>(null);
+  const leftRef = originalRef ?? originalInner;
+  const rightRef = translatedRef ?? translatedInner;
+
+  useHoverDrivenSync(leftRef, rightRef);
+
+  const translatedBlocks = doc.blocks.map((b) => translatedMap[b.id] || b);
+  const badge = fileType ? fileType.toUpperCase() : null;
+
+  return (
+    <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="document-viewer">
+      <Pane title="原文" subtitle={doc.title} badge={badge} containerRef={leftRef}>
+        {doc.blocks.map((block) => (
+          <BlockRenderer
+            key={block.id}
+            docId={doc.id}
+            block={block}
+            resources={doc.resources}
+            activeId={activeId}
+            onSelect={onSelect}
+          />
+        ))}
+      </Pane>
+
+      <div className="w-px bg-slate-200" />
+
+      <Pane title="译文" subtitle="翻译后" containerRef={rightRef}>
+        {translatedBlocks.map((block) => (
+          <BlockRenderer
+            key={block.id}
+            docId={doc.id}
+            block={block}
+            resources={doc.resources}
+            activeId={activeId}
+            onSelect={onSelect}
+            badgeFallback={fallbackIds?.has(block.id)}
+            interactive={interactive && block.type === 'paragraph' ? interactive : undefined}
+          />
+        ))}
+      </Pane>
+    </div>
+  );
+}

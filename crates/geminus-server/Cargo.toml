@@ -1,0 +1,31 @@
+[package]
+name = "geminus-server"
+version.workspace = true
+edition.workspace = true
+description = "geminus HTTP+SSE 壳：映射 plan.md 的 Tauri IPC 语义"
+
+[dependencies]
+geminus-core = { path = "../geminus-core" }
+axum = { workspace = true, features = ["multipart"] }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+futures = { workspace = true }
+base64 = { workspace = true }
+dotenvy = { workspace = true }
+uuid = { workspace = true }
+rusqlite = { workspace = true }
+sha2 = { workspace = true }
+pbkdf2 = { version = "0.12", default-features = false }
+hmac = { version = "0.12" }
+subtle = { version = "2" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+http-body-util = "0.1"
+futures = { workspace = true }
+zip = { workspace = true }

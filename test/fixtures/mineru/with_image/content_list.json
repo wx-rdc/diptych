@@ -1,0 +1,74 @@
+[
+    {
+        "type": "text",
+        "text": "Figure experiments start with a description of the visual dataset and the acquisition protocol used to collect all samples.",
+        "bbox": [
+            91,
+            74,
+            856,
+            114
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "image",
+        "img_path": "images/447787701ac1b408ddf378debade435f48a1013346c7838c4fd4516b1976f236.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "content": "",
+        "bbox": [
+            367,
+            128,
+            629,
+            253
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "The first figure above shows the red stimulus distribution over the calibration trials of the main experiment.",
+        "bbox": [
+            91,
+            255,
+            903,
+            292
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "On this second page a differently colored figure is presented before the closing analysis paragraphs of the section.",
+        "bbox": [
+            91,
+            74,
+            893,
+            114
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "image",
+        "img_path": "images/890aa029116d21b84aa6b732b76614911ba02c68f5b9a1a6b0ae3e00a0e39f25.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "content": "",
+        "bbox": [
+            401,
+            128,
+            593,
+            273
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "The blue square figure presents the control condition results that complete the analysis section.",
+        "bbox": [
+            91,
+            275,
+            890,
+            313
+        ],
+        "page_idx": 1
+    }
+]

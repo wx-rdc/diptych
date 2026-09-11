@@ -1,0 +1,28 @@
+[package]
+name = "geminus-core"
+version.workspace = true
+edition.workspace = true
+description = "geminus 核心库：DOCX 解析 / IR / LLM 翻译 / SQLite 缓存"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+quick-xml = { workspace = true }
+zip = { workspace = true }
+sha2 = { workspace = true }
+rusqlite = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+base64 = { workspace = true }
+dotenvy = { workspace = true }
+uuid = { workspace = true }
+pdf = "0.10.0"
+flate2 = "1.1.10"
+lopdf = "0.45.0"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+futures = { workspace = true }

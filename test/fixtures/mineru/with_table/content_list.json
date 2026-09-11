@@ -1,0 +1,38 @@
+[
+    {
+        "type": "text",
+        "text": "Table one summarizes the quantitative comparison between the baseline method and our proposed approach on the test split.",
+        "bbox": [
+            91,
+            74,
+            877,
+            113
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "table",
+        "img_path": "images/5e2e735e63d098d04f386ae42b52467f2871ac5b25a2101aac90bb752d74e9ed.jpg",
+        "table_caption": [],
+        "table_footnote": [],
+        "table_body": "<table><tr><td>Method</td><td>Accuracy</td><td>F1</td></tr><tr><td>Baseline</td><td>78.4</td><td>77.1</td></tr><tr><td>Ours</td><td>84.2</td><td>83.6</td></tr></table>",
+        "bbox": [
+            215,
+            128,
+            782,
+            196
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Numbers in the TABLEMARKER table are averaged over three runs with different random seeds for statistical reliability.",
+        "bbox": [
+            91,
+            199,
+            900,
+            236
+        ],
+        "page_idx": 0
+    }
+]

@@ -1,0 +1,261 @@
+[
+    {
+        "type": "text",
+        "text": "MIXEDTITLE-MARKER A Study of Mixed La",
+        "text_level": 2,
+        "bbox": [
+            83,
+            70,
+            1000,
+            104
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Anonymous Authors — Institution — email at example dot org",
+        "bbox": [
+            214,
+            128,
+            782,
+            148
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "MIXEDLEFT-MARKER The body of this document is set in two columns while the title spans the full width of the page above them. This arrangement is typical of academic conference proceedings typeset with standard style files.",
+        "bbox": [
+            81,
+            66,
+            477,
+            183
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Extended discussion of the rendering pipeline covers font subsetting, stream compression, and the coordinate transforms that place every glyph precisely on the page.",
+        "bbox": [
+            81,
+            198,
+            444,
+            295
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Column balancing on the final page is achieved by measuring remaining vertical space and redistributing trailing flowables so both columns end within one baseline.",
+        "bbox": [
+            81,
+            311,
+            470,
+            388
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Widow and orphan control prevents single lines of a paragraph from appearing alone at the top or bottom of a column, improving readability of dense scientific text.",
+        "bbox": [
+            81,
+            404,
+            472,
+            500
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "The typesetter supports floating figures and captions although only in column figures are exercised by this fixture document for layout regression purposes.",
+        "bbox": [
+            81,
+            516,
+            467,
+            594
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Baseline comparisons include nearest neighbour classifiers in raw pixel space, linear probes on frozen features, and per episode finetuning of all layers for reference.",
+        "bbox": [
+            81,
+            609,
+            462,
+            705
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Sensitivity analysis varies the number of episodes, the embedding dimensionality, and the distance metric among euclidean, cosine, and learned mahalanobis variants.",
+        "bbox": [
+            81,
+            722,
+            473,
+            799
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Error analysis groups mistakes by visual similarity tiers and shows most confusions occur within fine grained families such as alphabet scripts or bird species.",
+        "bbox": [
+            81,
+            816,
+            473,
+            893
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "MIXEDRIGHT-MARKER Figures may float within a column. The green image below illustrates an in column figure with its caption placed immediately underneath the artwork in this right column of the second page of the document.",
+        "bbox": [
+            513,
+            66,
+            887,
+            181
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "image",
+        "img_path": "images/cecd056493646e2a7aa75d570486e80042f60fca9898a076afa31ff2a2db118f.jpg",
+        "image_caption": [
+            "Figure 1: An example column width figure."
+        ],
+        "image_footnote": [],
+        "content": "",
+        "bbox": [
+            517,
+            184,
+            743,
+            295
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "MIXEDLEFT2-MARKER The third page continues the two column body with discussion paragraphs that fill both columns naturally through the automatic flow mechanism described earlier in the typesetting engine documentation.",
+        "bbox": [
+            513,
+            363,
+            892,
+            479
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Visualization of learned spaces uses stochastic neighbor embedding projections with perplexity thirty and reveals coherent clusters corresponding to the novel categories.",
+        "bbox": [
+            513,
+            494,
+            911,
+            590
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "RIGHTCOL2-MARKER Finally we conclude that mixed layouts are handled by detecting spanning elements before reading order sorting is applied to remaining column blocks.",
+        "bbox": [
+            513,
+            606,
+            892,
+            703
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Together these mechanisms produce a compact yet realistic sample of mixed layout academic typography suitable for unit testing reading order detection across pages.",
+        "bbox": [
+            513,
+            719,
+            908,
+            815
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Margin kerning and ligature formation refine the spacing between individual glyph pairs beyond what uniform character advance widths alone can achieve for high quality output.",
+        "bbox": [
+            81,
+            66,
+            480,
+            164
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "text",
+        "text": "Stream objects are compressed with the flate algorithm by default which reduces file size substantially for text heavy documents while keeping random access to pages intact.",
+        "bbox": [
+            81,
+            179,
+            462,
+            275
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "text",
+        "text": "Cross references may be stored as traditional tables or as compressed cross reference streams depending on the producer version and the compatibility targets of the document.",
+        "bbox": [
+            83,
+            292,
+            460,
+            388
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "text",
+        "text": "Metadata in the extended format carries bibliographic fields such as title, author, subject, and keywords for indexing by external catalogue systems and desktop search engines.",
+        "bbox": [
+            83,
+            404,
+            457,
+            500
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "text",
+        "text": "Outline entries form a hierarchical table of contents with destination references that survive deep copying of pages between documents under conforming implementations.",
+        "bbox": [
+            81,
+            516,
+            473,
+            612
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "text",
+        "text": "Annotation subtypes include text notes, highlights, and file attachments, none of which participate in the main content stream parsing performed by the extraction pipeline.",
+        "bbox": [
+            83,
+            628,
+            455,
+            724
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "text",
+        "text": "Finally the trailer dictionary ties the object graph together with the root catalog reference and encryption parameters if present, completing the structural overview of the format.",
+        "bbox": [
+            81,
+            741,
+            473,
+            838
+        ],
+        "page_idx": 2
+    }
+]

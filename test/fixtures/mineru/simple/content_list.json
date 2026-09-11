@@ -1,0 +1,57 @@
+[
+    {
+        "type": "text",
+        "text": "Machine learning is a subset of artificial intelligence that focuses on algorithms learning patterns from data. Modern systems rely on large corpora and gradient based optimization methods.",
+        "bbox": [
+            91,
+            74,
+            893,
+            133
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Natural language processing studies the interaction between computers and human language. It spans syntax, semantics, and pragmatic inference across many application domains.",
+        "bbox": [
+            91,
+            148,
+            890,
+            205
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Computer vision enables machines to interpret visual scenes from digital images. Convolutional networks drove remarkable progress on recognition benchmarks during the last decade.",
+        "bbox": [
+            91,
+            224,
+            877,
+            281
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Reinforcement learning trains agents to make sequences of decisions by maximizing cumulative reward signals. Applications include game playing, robotics, and recommendation systems.",
+        "bbox": [
+            91,
+            297,
+            864,
+            356
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Transfer learning reuses knowledge from a source task to improve learning on a related target task. Pretrained language models are a prominent example of this paradigm in practice.",
+        "bbox": [
+            91,
+            373,
+            893,
+            430
+        ],
+        "page_idx": 0
+    }
+]

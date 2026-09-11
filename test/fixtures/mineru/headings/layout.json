@@ -1,0 +1,1322 @@
+{
+    "pdf_info": [
+        {
+            "preproc_blocks": [
+                {
+                    "bbox": [
+                        57,
+                        62,
+                        416,
+                        88
+                    ],
+                    "type": "title",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                60,
+                                63,
+                                414,
+                                87
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        60,
+                                        63,
+                                        414,
+                                        87
+                                    ],
+                                    "type": "text",
+                                    "content": "Chapter One: Introduction",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "level": 1
+                },
+                {
+                    "bbox": [
+                        56,
+                        98,
+                        544,
+                        128
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 1,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                99,
+                                542,
+                                111
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        99,
+                                        542,
+                                        111
+                                    ],
+                                    "type": "text",
+                                    "content": "This chapter introduces the research background and motivation. We review prior work",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                114,
+                                268,
+                                125
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        114,
+                                        268,
+                                        125
+                                    ],
+                                    "type": "text",
+                                    "content": "and position our contributions clearly.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        57,
+                        142,
+                        320,
+                        160
+                    ],
+                    "type": "title",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                143,
+                                318,
+                                159
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        143,
+                                        318,
+                                        159
+                                    ],
+                                    "type": "text",
+                                    "content": "Background and Related Work",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "level": 2
+                },
+                {
+                    "bbox": [
+                        56,
+                        168,
+                        480,
+                        199
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 3,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                170,
+                                478,
+                                182
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        170,
+                                        478,
+                                        182
+                                    ],
+                                    "type": "text",
+                                    "content": "Early approaches relied on hand crafted features and shallow models. Deep",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                185,
+                                409,
+                                198
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        185,
+                                        409,
+                                        198
+                                    ],
+                                    "type": "text",
+                                    "content": "architectures replaced these pipelines with end to end training.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        213,
+                        533,
+                        243
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 4,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                214,
+                                531,
+                                226
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        214,
+                                        531,
+                                        226
+                                    ],
+                                    "type": "text",
+                                    "content": "This paragraph is set in Helvetica, a base fourteen font without an embedded ToUnicode map, to",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                229,
+                                233,
+                                241
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        229,
+                                        233,
+                                        241
+                                    ],
+                                    "type": "text",
+                                    "content": "exercise the fallback decoding path.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        57,
+                        257,
+                        206,
+                        274
+                    ],
+                    "type": "title",
+                    "angle": 0,
+                    "index": 5,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                257,
+                                205,
+                                274
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        257,
+                                        205,
+                                        274
+                                    ],
+                                    "type": "text",
+                                    "content": "Experimental Setup",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "level": 2
+                },
+                {
+                    "bbox": [
+                        56,
+                        280,
+                        525,
+                        309
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 6,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                281,
+                                523,
+                                293
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        281,
+                                        523,
+                                        293
+                                    ],
+                                    "type": "text",
+                                    "content": "We follow standard evaluation protocols and report mean scores over three random",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                296,
+                                285,
+                                308
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        296,
+                                        285,
+                                        308
+                                    ],
+                                    "type": "text",
+                                    "content": "seeds for every experiment in the paper.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        323,
+                        321,
+                        338
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 7,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                326,
+                                318,
+                                336
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        326,
+                                        318,
+                                        336
+                                    ],
+                                    "type": "text",
+                                    "content": "Our main contributions are summarized below:",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        58,
+                        352,
+                        367,
+                        368
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 8,
+                    "lines": [
+                        {
+                            "bbox": [
+                                61,
+                                354,
+                                364,
+                                366
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        61,
+                                        354,
+                                        364,
+                                        366
+                                    ],
+                                    "type": "text",
+                                    "content": "• Fast algorithm with linear time complexity in practice",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        58,
+                        381,
+                        334,
+                        396
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 9,
+                    "lines": [
+                        {
+                            "bbox": [
+                                60,
+                                382,
+                                331,
+                                396
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        60,
+                                        382,
+                                        331,
+                                        396
+                                    ],
+                                    "type": "text",
+                                    "content": "• Novel loss function that stabilizes early training",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        58,
+                        411,
+                        386,
+                        425
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 10,
+                    "lines": [
+                        {
+                            "bbox": [
+                                61,
+                                412,
+                                384,
+                                423
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        61,
+                                        412,
+                                        384,
+                                        423
+                                    ],
+                                    "type": "text",
+                                    "content": "• Comprehensive ablation across four benchmark datasets",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        57,
+                        439,
+                        333,
+                        455
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 11,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                440,
+                                330,
+                                453
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        440,
+                                        330,
+                                        453
+                                    ],
+                                    "type": "text",
+                                    "content": "1. First numbered item about data preprocessing",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        468,
+                        348,
+                        483
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 12,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                470,
+                                345,
+                                481
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        470,
+                                        345,
+                                        481
+                                    ],
+                                    "type": "text",
+                                    "content": "2. Second numbered item about model architecture",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        498,
+                        548,
+                        528
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 13,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                498,
+                                547,
+                                511
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        498,
+                                        547,
+                                        511
+                                    ],
+                                    "type": "text",
+                                    "content": "A large vertical gap follows this paragraph to simulate an explicit empty block separator",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                514,
+                                193,
+                                525
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        514,
+                                        193,
+                                        525
+                                    ],
+                                    "type": "text",
+                                    "content": "in the source document.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        597,
+                        476,
+                        628
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 14,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                598,
+                                474,
+                                612
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        598,
+                                        474,
+                                        612
+                                    ],
+                                    "type": "text",
+                                    "content": "After the deliberate gap, the document continues with closing remarks and",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                614,
+                                267,
+                                626
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        614,
+                                        267,
+                                        626
+                                    ],
+                                    "type": "text",
+                                    "content": "acknowledgements for the reviewers.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ],
+            "discarded_blocks": [],
+            "page_size": [
+                612,
+                792
+            ],
+            "page_idx": 0,
+            "para_blocks": [
+                {
+                    "bbox": [
+                        57,
+                        62,
+                        416,
+                        88
+                    ],
+                    "type": "title",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                60,
+                                63,
+                                414,
+                                87
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        60,
+                                        63,
+                                        414,
+                                        87
+                                    ],
+                                    "type": "text",
+                                    "content": "Chapter One: Introduction",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "level": 1
+                },
+                {
+                    "bbox": [
+                        56,
+                        98,
+                        544,
+                        128
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 1,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                99,
+                                542,
+                                111
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        99,
+                                        542,
+                                        111
+                                    ],
+                                    "type": "text",
+                                    "content": "This chapter introduces the research background and motivation. We review prior work",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                114,
+                                268,
+                                125
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        114,
+                                        268,
+                                        125
+                                    ],
+                                    "type": "text",
+                                    "content": "and position our contributions clearly.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        57,
+                        142,
+                        320,
+                        160
+                    ],
+                    "type": "title",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                143,
+                                318,
+                                159
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        143,
+                                        318,
+                                        159
+                                    ],
+                                    "type": "text",
+                                    "content": "Background and Related Work",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "level": 2
+                },
+                {
+                    "bbox": [
+                        56,
+                        168,
+                        480,
+                        199
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 3,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                170,
+                                478,
+                                182
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        170,
+                                        478,
+                                        182
+                                    ],
+                                    "type": "text",
+                                    "content": "Early approaches relied on hand crafted features and shallow models. Deep",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                185,
+                                409,
+                                198
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        185,
+                                        409,
+                                        198
+                                    ],
+                                    "type": "text",
+                                    "content": "architectures replaced these pipelines with end to end training.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        213,
+                        533,
+                        243
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 4,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                214,
+                                531,
+                                226
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        214,
+                                        531,
+                                        226
+                                    ],
+                                    "type": "text",
+                                    "content": "This paragraph is set in Helvetica, a base fourteen font without an embedded ToUnicode map, to",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                229,
+                                233,
+                                241
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        229,
+                                        233,
+                                        241
+                                    ],
+                                    "type": "text",
+                                    "content": "exercise the fallback decoding path.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        57,
+                        257,
+                        206,
+                        274
+                    ],
+                    "type": "title",
+                    "angle": 0,
+                    "index": 5,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                257,
+                                205,
+                                274
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        257,
+                                        205,
+                                        274
+                                    ],
+                                    "type": "text",
+                                    "content": "Experimental Setup",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "level": 2
+                },
+                {
+                    "bbox": [
+                        56,
+                        280,
+                        525,
+                        309
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 6,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                281,
+                                523,
+                                293
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        281,
+                                        523,
+                                        293
+                                    ],
+                                    "type": "text",
+                                    "content": "We follow standard evaluation protocols and report mean scores over three random",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                296,
+                                285,
+                                308
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        296,
+                                        285,
+                                        308
+                                    ],
+                                    "type": "text",
+                                    "content": "seeds for every experiment in the paper.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        323,
+                        321,
+                        338
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 7,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                326,
+                                318,
+                                336
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        326,
+                                        318,
+                                        336
+                                    ],
+                                    "type": "text",
+                                    "content": "Our main contributions are summarized below:",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        58,
+                        352,
+                        367,
+                        368
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 8,
+                    "lines": [
+                        {
+                            "bbox": [
+                                61,
+                                354,
+                                364,
+                                366
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        61,
+                                        354,
+                                        364,
+                                        366
+                                    ],
+                                    "type": "text",
+                                    "content": "• Fast algorithm with linear time complexity in practice",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        58,
+                        381,
+                        334,
+                        396
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 9,
+                    "lines": [
+                        {
+                            "bbox": [
+                                60,
+                                382,
+                                331,
+                                396
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        60,
+                                        382,
+                                        331,
+                                        396
+                                    ],
+                                    "type": "text",
+                                    "content": "• Novel loss function that stabilizes early training",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        58,
+                        411,
+                        386,
+                        425
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 10,
+                    "lines": [
+                        {
+                            "bbox": [
+                                61,
+                                412,
+                                384,
+                                423
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        61,
+                                        412,
+                                        384,
+                                        423
+                                    ],
+                                    "type": "text",
+                                    "content": "• Comprehensive ablation across four benchmark datasets",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        57,
+                        439,
+                        333,
+                        455
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 11,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                440,
+                                330,
+                                453
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        440,
+                                        330,
+                                        453
+                                    ],
+                                    "type": "text",
+                                    "content": "1. First numbered item about data preprocessing",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        468,
+                        348,
+                        483
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 12,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                470,
+                                345,
+                                481
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        470,
+                                        345,
+                                        481
+                                    ],
+                                    "type": "text",
+                                    "content": "2. Second numbered item about model architecture",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        498,
+                        548,
+                        528
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 13,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                498,
+                                547,
+                                511
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        498,
+                                        547,
+                                        511
+                                    ],
+                                    "type": "text",
+                                    "content": "A large vertical gap follows this paragraph to simulate an explicit empty block separator",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                514,
+                                193,
+                                525
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        514,
+                                        193,
+                                        525
+                                    ],
+                                    "type": "text",
+                                    "content": "in the source document.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        597,
+                        476,
+                        628
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 14,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                598,
+                                474,
+                                612
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        598,
+                                        474,
+                                        612
+                                    ],
+                                    "type": "text",
+                                    "content": "After the deliberate gap, the document continues with closing remarks and",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                614,
+                                267,
+                                626
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        614,
+                                        267,
+                                        626
+                                    ],
+                                    "type": "text",
+                                    "content": "acknowledgements for the reviewers.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ]
+        }
+    ],
+    "_backend": "hybrid",
+    "_effort": "medium",
+    "_ocr_enable": false,
+    "_version_name": "3.4.4"
+}

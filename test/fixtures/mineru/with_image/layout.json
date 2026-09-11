@@ -1,0 +1,660 @@
+{
+    "pdf_info": [
+        {
+            "preproc_blocks": [
+                {
+                    "bbox": [
+                        56,
+                        59,
+                        524,
+                        91
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                60,
+                                522,
+                                72
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        60,
+                                        522,
+                                        72
+                                    ],
+                                    "type": "text",
+                                    "content": "Figure experiments start with a description of the visual dataset and the acquisition",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                76,
+                                257,
+                                88
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        76,
+                                        257,
+                                        88
+                                    ],
+                                    "type": "text",
+                                    "content": "protocol used to collect all samples.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "type": "image",
+                    "bbox": [
+                        225,
+                        102,
+                        385,
+                        201
+                    ],
+                    "blocks": [
+                        {
+                            "bbox": [
+                                225,
+                                102,
+                                385,
+                                201
+                            ],
+                            "type": "image_body",
+                            "angle": 0,
+                            "lines": [
+                                {
+                                    "bbox": [
+                                        225,
+                                        102,
+                                        385,
+                                        201
+                                    ],
+                                    "spans": [
+                                        {
+                                            "bbox": [
+                                                225,
+                                                102,
+                                                385,
+                                                201
+                                            ],
+                                            "type": "image",
+                                            "image_path": "447787701ac1b408ddf378debade435f48a1013346c7838c4fd4516b1976f236.jpg"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "index": 1
+                        }
+                    ],
+                    "index": 1
+                },
+                {
+                    "bbox": [
+                        56,
+                        202,
+                        553,
+                        232
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                203,
+                                551,
+                                215
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        203,
+                                        551,
+                                        215
+                                    ],
+                                    "type": "text",
+                                    "content": "The first figure above shows the red stimulus distribution over the calibration trials of the",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                219,
+                                156,
+                                230
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        219,
+                                        156,
+                                        230
+                                    ],
+                                    "type": "text",
+                                    "content": "main experiment.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ],
+            "discarded_blocks": [],
+            "page_size": [
+                612,
+                792
+            ],
+            "page_idx": 0,
+            "para_blocks": [
+                {
+                    "bbox": [
+                        56,
+                        59,
+                        524,
+                        91
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                60,
+                                522,
+                                72
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        60,
+                                        522,
+                                        72
+                                    ],
+                                    "type": "text",
+                                    "content": "Figure experiments start with a description of the visual dataset and the acquisition",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                76,
+                                257,
+                                88
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        76,
+                                        257,
+                                        88
+                                    ],
+                                    "type": "text",
+                                    "content": "protocol used to collect all samples.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "type": "image",
+                    "bbox": [
+                        225,
+                        102,
+                        385,
+                        201
+                    ],
+                    "blocks": [
+                        {
+                            "bbox": [
+                                225,
+                                102,
+                                385,
+                                201
+                            ],
+                            "type": "image_body",
+                            "angle": 0,
+                            "lines": [
+                                {
+                                    "bbox": [
+                                        225,
+                                        102,
+                                        385,
+                                        201
+                                    ],
+                                    "spans": [
+                                        {
+                                            "bbox": [
+                                                225,
+                                                102,
+                                                385,
+                                                201
+                                            ],
+                                            "type": "image",
+                                            "image_path": "447787701ac1b408ddf378debade435f48a1013346c7838c4fd4516b1976f236.jpg"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "index": 1
+                        }
+                    ],
+                    "index": 1
+                },
+                {
+                    "bbox": [
+                        56,
+                        202,
+                        553,
+                        232
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                203,
+                                551,
+                                215
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        203,
+                                        551,
+                                        215
+                                    ],
+                                    "type": "text",
+                                    "content": "The first figure above shows the red stimulus distribution over the calibration trials of the",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                219,
+                                156,
+                                230
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        219,
+                                        156,
+                                        230
+                                    ],
+                                    "type": "text",
+                                    "content": "main experiment.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ]
+        },
+        {
+            "preproc_blocks": [
+                {
+                    "bbox": [
+                        56,
+                        59,
+                        547,
+                        91
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                60,
+                                545,
+                                73
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        60,
+                                        545,
+                                        73
+                                    ],
+                                    "type": "text",
+                                    "content": "On this second page a differently colored figure is presented before the closing analysis",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                75,
+                                203,
+                                87
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        75,
+                                        203,
+                                        87
+                                    ],
+                                    "type": "text",
+                                    "content": "paragraphs of the section.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "type": "image",
+                    "bbox": [
+                        246,
+                        102,
+                        363,
+                        217
+                    ],
+                    "blocks": [
+                        {
+                            "bbox": [
+                                246,
+                                102,
+                                363,
+                                217
+                            ],
+                            "type": "image_body",
+                            "angle": 0,
+                            "lines": [
+                                {
+                                    "bbox": [
+                                        246,
+                                        102,
+                                        363,
+                                        217
+                                    ],
+                                    "spans": [
+                                        {
+                                            "bbox": [
+                                                246,
+                                                102,
+                                                363,
+                                                217
+                                            ],
+                                            "type": "image",
+                                            "image_path": "890aa029116d21b84aa6b732b76614911ba02c68f5b9a1a6b0ae3e00a0e39f25.jpg"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "index": 1
+                        }
+                    ],
+                    "index": 1
+                },
+                {
+                    "bbox": [
+                        56,
+                        218,
+                        545,
+                        248
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                219,
+                                544,
+                                232
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        219,
+                                        544,
+                                        232
+                                    ],
+                                    "type": "text",
+                                    "content": "The blue square figure presents the control condition results that complete the analysis",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                234,
+                                102,
+                                247
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        234,
+                                        102,
+                                        247
+                                    ],
+                                    "type": "text",
+                                    "content": "section.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ],
+            "discarded_blocks": [],
+            "page_size": [
+                612,
+                792
+            ],
+            "page_idx": 1,
+            "para_blocks": [
+                {
+                    "bbox": [
+                        56,
+                        59,
+                        547,
+                        91
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                60,
+                                545,
+                                73
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        60,
+                                        545,
+                                        73
+                                    ],
+                                    "type": "text",
+                                    "content": "On this second page a differently colored figure is presented before the closing analysis",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                75,
+                                203,
+                                87
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        75,
+                                        203,
+                                        87
+                                    ],
+                                    "type": "text",
+                                    "content": "paragraphs of the section.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "type": "image",
+                    "bbox": [
+                        246,
+                        102,
+                        363,
+                        217
+                    ],
+                    "blocks": [
+                        {
+                            "bbox": [
+                                246,
+                                102,
+                                363,
+                                217
+                            ],
+                            "type": "image_body",
+                            "angle": 0,
+                            "lines": [
+                                {
+                                    "bbox": [
+                                        246,
+                                        102,
+                                        363,
+                                        217
+                                    ],
+                                    "spans": [
+                                        {
+                                            "bbox": [
+                                                246,
+                                                102,
+                                                363,
+                                                217
+                                            ],
+                                            "type": "image",
+                                            "image_path": "890aa029116d21b84aa6b732b76614911ba02c68f5b9a1a6b0ae3e00a0e39f25.jpg"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "index": 1
+                        }
+                    ],
+                    "index": 1
+                },
+                {
+                    "bbox": [
+                        56,
+                        218,
+                        545,
+                        248
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                219,
+                                544,
+                                232
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        219,
+                                        544,
+                                        232
+                                    ],
+                                    "type": "text",
+                                    "content": "The blue square figure presents the control condition results that complete the analysis",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                234,
+                                102,
+                                247
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        234,
+                                        102,
+                                        247
+                                    ],
+                                    "type": "text",
+                                    "content": "section.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ]
+        }
+    ],
+    "_backend": "hybrid",
+    "_effort": "medium",
+    "_ocr_enable": false,
+    "_version_name": "3.4.4"
+}

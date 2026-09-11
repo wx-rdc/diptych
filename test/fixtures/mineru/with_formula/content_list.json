@@ -1,0 +1,59 @@
+[
+    {
+        "type": "text",
+        "text": "The energy momentum relation is perhaps the most famous equation in special relativity theory.",
+        "bbox": [
+            91,
+            74,
+            903,
+            113
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "equation",
+        "text": "$$\n\\mathrm{FORMULAMARKER} E = m c ^ {2}\n$$",
+        "text_format": "latex",
+        "bbox": [
+            233,
+            125,
+            553,
+            152
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "A ratio of sums appears frequently in normalization layers of modern neural architectures.",
+        "bbox": [
+            91,
+            170,
+            784,
+            208
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "equation",
+        "text": "$$\n\\text { FORMULAMARKER } (a + b) / (c + d)\n$$",
+        "text_format": "latex",
+        "bbox": [
+            233,
+            227,
+            637,
+            250
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Both expressions above are typeset as ordinary text runs inside the portable document file.",
+        "bbox": [
+            91,
+            266,
+            888,
+            304
+        ],
+        "page_idx": 0
+    }
+]

@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* 用户字号档（useReadingFontSize 写入；未设置时默认 18px） */
+  --geminus-user-fs: 18px;
+  /* 生效阅读字号 */
+  --reading-fs: var(--geminus-user-fs);
+  --reading-lh: 1.75;
+  /* v2.2 T2：双栏几何令牌——两栏等宽对齐、页间距统一、块级垂直节奏 */
+  --pane-pad: 24px;
+  --page-gap: 16px;
+  --gap-block: 0.9em;
+}
+
+/* 窄屏自动封顶 16px（v2.1 T2.5） */
+@media (max-width: 1280px) {
+  :root {
+    --reading-fs: min(var(--geminus-user-fs), 16px);
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* 阅读正文（BlockRenderer 段落/列表/标题挂此类，v2.1 T2.2 字号体系） */
+.reading-block {
+  font-size: var(--reading-fs);
+  line-height: var(--reading-lh);
+}
+/* 段落间距：相邻块明确区分（P1-4 渲染层修复，v2.1 T2.6；v2.2 T2.5 采纳节奏令牌） */
+.reading-block + .reading-block {
+  margin-top: var(--gap-block);
+}
+
+/* v2.4：Hover 联动高亮（useHoverDrivenSync 双侧直接操作类；PDF 左栏 region 同用） */
+.g-block-hover {
+  background-color: rgba(59, 130, 246, 0.08);
+  box-shadow: inset 3px 0 0 #93c5fd;
+  border-radius: 2px;
+  transition: background-color 0.12s ease-out;
+}
+
+/* 窄屏提示条（<900px 显示，v2.1 T2.5） */
+.narrow-hint {
+  display: none;
+}
+@media (max-width: 900px) {
+  .narrow-hint {
+    display: flex;
+  }
+}

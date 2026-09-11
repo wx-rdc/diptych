@@ -1,0 +1,29 @@
+# geminus-server systemd unit（部署到 /etc/systemd/system/geminus-server.service）
+# 环境变量在 /opt/geminus/config/geminus.env（权限 600，仅部署用户可读）
+[Unit]
+Description=geminus server (axum HTTP+SSE)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=geminus
+Group=geminus
+WorkingDirectory=/opt/geminus/current
+EnvironmentFile=/opt/geminus/config/geminus.env
+ExecStart=/opt/geminus/current/geminus-server
+Restart=always
+RestartSec=3
+# 资源与安全限制
+LimitNOFILE=65536
+MemoryMax=2G
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/opt/geminus/data /opt/geminus/uploads /opt/geminus/logs
+# 崩溃自动拉起 + 前端可重连（验收 4.4）
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=geminus-server
+
+[Install]
+WantedBy=multi-user.target

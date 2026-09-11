@@ -1,0 +1,233 @@
+[
+    {
+        "type": "text",
+        "text": "Abstract. We study few shot classification where a learner must recognize novel categories from a handful of labelled examples. Our approach builds a metric space using prototypical representations learned end to end.",
+        "bbox": [
+            81,
+            66,
+            465,
+            181
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "LEFTCOL-MARKER Few shot learning remains challenging because novel categories contain very few training samples. Metric based methods classify query points by distance to class prototypes in an embedding space computed by a shared nonlinear encoder network.",
+        "bbox": [
+            81,
+            198,
+            465,
+            351
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Prototypical networks learn a metric space in which classification is performed by computing distances to prototype representations of each class, enabling rapid generalization to new classes not present during training.",
+        "bbox": [
+            81,
+            368,
+            475,
+            483
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "The matching network framework attends over labelled samples with an attention kernel over the embeddings of the support set, while prototypical networks use class level mean representations that reduce variance considerably.",
+        "bbox": [
+            81,
+            500,
+            478,
+            614
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "We evaluate on the standard Omniglot and miniImageNet benchmarks following the episode construction protocol of prior work, with five way and one or five shot evaluation tasks and fifteen query points per class.",
+        "bbox": [
+            81,
+            630,
+            480,
+            744
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Results show consistent improvements over baseline methods across all shot counts and evaluation episodes, confirming that simple prototype averaging is a strong and data efficient inductive bias for few shot recognition problems.",
+        "bbox": [
+            81,
+            761,
+            447,
+            895
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Training uses the Adam optimizer with a cosine learning rate schedule over twenty thousand meta training steps sampled from the union of base training categories in every single episode.",
+        "bbox": [
+            513,
+            66,
+            903,
+            164
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Data augmentation includes random crops, color jitter, and horizontal flips applied only to the support set during meta training so the query distribution stays untouched for honest evaluation of generalization.",
+        "bbox": [
+            513,
+            179,
+            913,
+            275
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "RIGHTCOL-MARKER Hyperparameters were selected on a held out validation split of training classes rather than on the novel test categories, keeping the protocol free of test set information leakage throughout all experiments.",
+        "bbox": [
+            513,
+            292,
+            911,
+            407
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "The embedding dimension is set to six hundred forty and the convolutional backbone is initialized from pretrained weights then fine tuned jointly with the metric objective during the meta training procedure.",
+        "bbox": [
+            513,
+            422,
+            895,
+            537
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Episode construction samples five ways with one or five shots and fifteen query points per class, matching the protocol used by prior work so comparisons remain directly reproducible by independent laboratories.",
+        "bbox": [
+            513,
+            554,
+            906,
+            669
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Statistical significance is assessed with bootstrap confidence intervals over one thousand resamples of the evaluation episodes, reporting the median and ninety five percent bounds for every table entry.",
+        "bbox": [
+            513,
+            685,
+            906,
+            782
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Reproducibility statements list all random seeds, framework versions, and hardware configurations used for every table in the paper so others can verify the reported numbers exactly.",
+        "bbox": [
+            513,
+            797,
+            900,
+            893
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Error analysis groups mistakes by visual similarity tiers and shows most confusions occur within fine grained families such as alphabet scripts or bird species subgroups of the data.",
+        "bbox": [
+            81,
+            66,
+            473,
+            162
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "LEFTCOL2-MARKER Visualization of the learned spaces uses stochastic neighbor embedding projections with perplexity thirty and reveals coherent clusters corresponding to the novel categories held out from the training split.",
+        "bbox": [
+            81,
+            179,
+            478,
+            295
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Sensitivity analysis varies the number of training episodes, the embedding dimensionality, and the distance metric among euclidean, cosine, and learned mahalanobis variants of the prototypical classification rule.",
+        "bbox": [
+            81,
+            310,
+            460,
+            426
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Limitations include the modest scale of the benchmarks and the assumption that support and query distributions are drawn from the same underlying generative process during evaluation.",
+        "bbox": [
+            81,
+            441,
+            477,
+            539
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Future work will explore hierarchical prototypes that capture part whole relationships among categories and temporal extensions of the metric space for streaming recognition.",
+        "bbox": [
+            81,
+            554,
+            457,
+            650
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "RIGHTCOL2-MARKER Ethics considerations address potential dual use of classification technology and the composition of evaluation cohorts with respect to demographic representation criteria required by modern review guidelines.",
+        "bbox": [
+            81,
+            666,
+            475,
+            782
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "Acknowledgements. The authors thank the anonymous reviewers for constructive feedback and colleagues for discussions that shaped the final presentation of the experimental sections.",
+        "bbox": [
+            81,
+            797,
+            477,
+            893
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "In summary, prototypical networks provide a simple, efficient, and interpretable approach to few shot learning that continues to serve as a standard baseline in the research literature.",
+        "bbox": [
+            513,
+            66,
+            910,
+            162
+        ],
+        "page_idx": 1
+    }
+]

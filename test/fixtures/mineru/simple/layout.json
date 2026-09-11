@@ -1,0 +1,790 @@
+{
+    "pdf_info": [
+        {
+            "preproc_blocks": [
+                {
+                    "bbox": [
+                        56,
+                        59,
+                        547,
+                        106
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                60,
+                                545,
+                                73
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        60,
+                                        545,
+                                        73
+                                    ],
+                                    "type": "text",
+                                    "content": "Machine learning is a subset of artificial intelligence that focuses on algorithms learning",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                76,
+                                490,
+                                87
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        76,
+                                        490,
+                                        87
+                                    ],
+                                    "type": "text",
+                                    "content": "patterns from data. Modern systems rely on large corpora and gradient based",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                91,
+                                182,
+                                103
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        91,
+                                        182,
+                                        103
+                                    ],
+                                    "type": "text",
+                                    "content": "optimization methods.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        118,
+                        545,
+                        163
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 1,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                119,
+                                525,
+                                132
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        119,
+                                        525,
+                                        132
+                                    ],
+                                    "type": "text",
+                                    "content": "Natural language processing studies the interaction between computers and human",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                135,
+                                544,
+                                147
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        135,
+                                        544,
+                                        147
+                                    ],
+                                    "type": "text",
+                                    "content": "language. It spans syntax, semantics, and pragmatic inference across many application",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                149,
+                                110,
+                                162
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        149,
+                                        110,
+                                        162
+                                    ],
+                                    "type": "text",
+                                    "content": "domains.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        178,
+                        537,
+                        223
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                178,
+                                509,
+                                191
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        178,
+                                        509,
+                                        191
+                                    ],
+                                    "type": "text",
+                                    "content": "Computer vision enables machines to interpret visual scenes from digital images.",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                194,
+                                535,
+                                205
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        194,
+                                        535,
+                                        205
+                                    ],
+                                    "type": "text",
+                                    "content": "Convolutional networks drove remarkable progress on recognition benchmarks during",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                209,
+                                147,
+                                220
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        209,
+                                        147,
+                                        220
+                                    ],
+                                    "type": "text",
+                                    "content": "the last decade.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        236,
+                        529,
+                        282
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 3,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                237,
+                                527,
+                                249
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        237,
+                                        527,
+                                        249
+                                    ],
+                                    "type": "text",
+                                    "content": "Reinforcement learning trains agents to make sequences of decisions by maximizing",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                252,
+                                479,
+                                265
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        252,
+                                        479,
+                                        265
+                                    ],
+                                    "type": "text",
+                                    "content": "cumulative reward signals. Applications include game playing, robotics, and",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                267,
+                                205,
+                                280
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        267,
+                                        205,
+                                        280
+                                    ],
+                                    "type": "text",
+                                    "content": "recommendation systems.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        296,
+                        547,
+                        341
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 4,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                297,
+                                545,
+                                309
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        297,
+                                        545,
+                                        309
+                                    ],
+                                    "type": "text",
+                                    "content": "Transfer learning reuses knowledge from a source task to improve learning on a related",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                312,
+                                533,
+                                324
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        312,
+                                        533,
+                                        324
+                                    ],
+                                    "type": "text",
+                                    "content": "target task. Pretrained language models are a prominent example of this paradigm in",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                327,
+                                108,
+                                339
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        327,
+                                        108,
+                                        339
+                                    ],
+                                    "type": "text",
+                                    "content": "practice.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ],
+            "discarded_blocks": [],
+            "page_size": [
+                612,
+                792
+            ],
+            "page_idx": 0,
+            "para_blocks": [
+                {
+                    "bbox": [
+                        56,
+                        59,
+                        547,
+                        106
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                60,
+                                545,
+                                73
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        60,
+                                        545,
+                                        73
+                                    ],
+                                    "type": "text",
+                                    "content": "Machine learning is a subset of artificial intelligence that focuses on algorithms learning",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                76,
+                                490,
+                                87
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        76,
+                                        490,
+                                        87
+                                    ],
+                                    "type": "text",
+                                    "content": "patterns from data. Modern systems rely on large corpora and gradient based",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                91,
+                                182,
+                                103
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        91,
+                                        182,
+                                        103
+                                    ],
+                                    "type": "text",
+                                    "content": "optimization methods.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        118,
+                        545,
+                        163
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 1,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                119,
+                                525,
+                                132
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        119,
+                                        525,
+                                        132
+                                    ],
+                                    "type": "text",
+                                    "content": "Natural language processing studies the interaction between computers and human",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                135,
+                                544,
+                                147
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        135,
+                                        544,
+                                        147
+                                    ],
+                                    "type": "text",
+                                    "content": "language. It spans syntax, semantics, and pragmatic inference across many application",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                149,
+                                110,
+                                162
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        149,
+                                        110,
+                                        162
+                                    ],
+                                    "type": "text",
+                                    "content": "domains.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        178,
+                        537,
+                        223
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                178,
+                                509,
+                                191
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        178,
+                                        509,
+                                        191
+                                    ],
+                                    "type": "text",
+                                    "content": "Computer vision enables machines to interpret visual scenes from digital images.",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                194,
+                                535,
+                                205
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        194,
+                                        535,
+                                        205
+                                    ],
+                                    "type": "text",
+                                    "content": "Convolutional networks drove remarkable progress on recognition benchmarks during",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                209,
+                                147,
+                                220
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        209,
+                                        147,
+                                        220
+                                    ],
+                                    "type": "text",
+                                    "content": "the last decade.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        236,
+                        529,
+                        282
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 3,
+                    "lines": [
+                        {
+                            "bbox": [
+                                59,
+                                237,
+                                527,
+                                249
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        237,
+                                        527,
+                                        249
+                                    ],
+                                    "type": "text",
+                                    "content": "Reinforcement learning trains agents to make sequences of decisions by maximizing",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                252,
+                                479,
+                                265
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        252,
+                                        479,
+                                        265
+                                    ],
+                                    "type": "text",
+                                    "content": "cumulative reward signals. Applications include game playing, robotics, and",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                267,
+                                205,
+                                280
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        267,
+                                        205,
+                                        280
+                                    ],
+                                    "type": "text",
+                                    "content": "recommendation systems.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "bbox": [
+                        56,
+                        296,
+                        547,
+                        341
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 4,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                297,
+                                545,
+                                309
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        297,
+                                        545,
+                                        309
+                                    ],
+                                    "type": "text",
+                                    "content": "Transfer learning reuses knowledge from a source task to improve learning on a related",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                312,
+                                533,
+                                324
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        312,
+                                        533,
+                                        324
+                                    ],
+                                    "type": "text",
+                                    "content": "target task. Pretrained language models are a prominent example of this paradigm in",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                327,
+                                108,
+                                339
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        327,
+                                        108,
+                                        339
+                                    ],
+                                    "type": "text",
+                                    "content": "practice.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ]
+        }
+    ],
+    "_backend": "hybrid",
+    "_effort": "medium",
+    "_ocr_enable": false,
+    "_version_name": "3.4.4"
+}

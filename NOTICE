@@ -1,0 +1,24 @@
+Diptych Community Edition
+Copyright 2026 [Copyright Holder, e.g. Hongyu Zhu / Wuxi RDC Tech]
+
+This product is licensed under the Apache License, Version 2.0.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+
+The "Diptych" name and logo are trademarks of [Copyright Holder].
+Nothing in this notice or the License grants any trademark rights;
+see TRADEMARK.md for the trademark policy.
+
+This product includes the following third-party components:
+  - pdf.js            (Apache-2.0)   © Mozilla Foundation
+  - KaTeX             (MIT)          © Khan Academy
+  - React             (MIT)          © Meta Platforms
+  - DOMPurify         (Apache-2.0/MPL) © Cure53
+  - Noto Sans SC      (SIL OFL 1.1)  © Google
+  - Rust crates: axum, tokio, lopdf, quick-xml, reqwest (MIT / Apache-2.0)
+Full attribution list: docs/THIRD_PARTY.md

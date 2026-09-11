@@ -1,0 +1,96 @@
+{
+  "simple.pdf": {
+    "pages": 1,
+    "images": 0,
+    "must_contain": [
+      "Machine learning",
+      "Natural language",
+      "Computer vision",
+      "Reinforcement learning",
+      "Transfer learning"
+    ]
+  },
+  "headings.pdf": {
+    "pages": 1,
+    "images": 0,
+    "must_contain": [
+      "Chapter One",
+      "Helvetica",
+      "Experimental Setup",
+      "numbered item"
+    ]
+  },
+  "with_image.pdf": {
+    "pages": 2,
+    "images": 2,
+    "must_contain": [
+      "Figure experiments",
+      "red stimulus",
+      "control condition"
+    ]
+  },
+  "with_table.pdf": {
+    "pages": 1,
+    "images": 0,
+    "must_contain": [
+      "TABLEMARKER",
+      "Method",
+      "Accuracy",
+      "Baseline",
+      "Ours"
+    ]
+  },
+  "with_formula.pdf": {
+    "pages": 1,
+    "images": 0,
+    "must_contain": [
+      "FORMULAMARKER",
+      "special relativity"
+    ]
+  },
+  "two_column.pdf": {
+    "pages": 2,
+    "images": 0,
+    "must_contain": [
+      "LEFTCOL-MARKER",
+      "RIGHTCOL-MARKER",
+      "Abstract"
+    ],
+    "leftcol_page": 0,
+    "rightcol_page": 0,
+    "leftcol_x": 54.0,
+    "rightcol_x": 318.0
+  },
+  "mixed_layout.pdf": {
+    "pages": 3,
+    "images": 1,
+    "must_contain": [
+      "MIXEDTITLE-MARKER",
+      "MIXEDLEFT-MARKER",
+      "MIXEDRIGHT-MARKER"
+    ],
+    "title_page": 0,
+    "title_x0": 54.0,
+    "body_first_page": 1,
+    "leftcol_x": 54.0
+  },
+  "empty.pdf": {
+    "pages": 1,
+    "images": 0,
+    "must_contain": []
+  },
+  "single_image.pdf": {
+    "pages": 1,
+    "images": 1,
+    "must_contain": []
+  },
+  "large.pdf": {
+    "pages": 100,
+    "images": 0,
+    "must_contain": [
+      "LARGEPAGE 1",
+      "LARGEPAGE 50",
+      "LARGEPAGE 100"
+    ]
+  }
+}

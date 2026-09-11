@@ -1,0 +1,36 @@
+# geminus nginx 站点模板（部署到 /etc/nginx/sites-available/geminus，软链到 sites-enabled）
+# 占位符：{{SERVER_NAME}}（域名或 _）、{{CERT_PATH}}/{{KEY_PATH}}（TLS 证书；HTTP-only 验证期见文末说明）
+#
+# 关键点（docs/deploy_plan.md 阶段 2.6）：
+# 1. /api/ 反代到 127.0.0.1 内网端口，proxy_buffering off 全局关闭——SSE 进度流
+#    （/api/parse、/api/translate）绝不能被 nginx 缓冲，否则前端进度卡死（验收 4.2）；
+#    读超时 ≥10min 对齐大文件解析与长翻译。
+# 2. client_max_body_size 与后端 GEMINUS_MAX_UPLOAD_MB 对齐（略放宽至 220m）。
+# 3. X-Real-IP 必须覆盖式注入（$remote_addr）——后端以此识别真实客户端 IP 做匿名限流；
+#    不能用 $proxy_add_x_forwarded_for（会保留客户端伪造的首段）。
+
+server {
+    listen 80;
+    server_name {{SERVER_NAME}};
+
+    # ACME 挑战放行（certbot webroot 模式）
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    # 验证期（无 TLS 证书时）直接服务；启用 TLS 后改为重定向：
+    # return 301 https://$host$request_uri;
+    include /etc/nginx/snippets/geminus-locations.conf;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name {{SERVER_NAME}};
+
+    ssl_certificate     {{CERT_PATH}};
+    ssl_certificate_key {{KEY_PATH}};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+
+    include /etc/nginx/snippets/geminus-locations.conf;
+}

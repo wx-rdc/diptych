@@ -1,0 +1,170 @@
+[
+    {
+        "type": "text",
+        "text": "Chapter One: Introduction",
+        "text_level": 1,
+        "bbox": [
+            93,
+            78,
+            679,
+            111
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "This chapter introduces the research background and motivation. We review prior work and position our contributions clearly.",
+        "bbox": [
+            91,
+            123,
+            888,
+            161
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Background and Related Work",
+        "text_level": 2,
+        "bbox": [
+            93,
+            179,
+            522,
+            202
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Early approaches relied on hand crafted features and shallow models. Deep architectures replaced these pipelines with end to end training.",
+        "bbox": [
+            91,
+            212,
+            784,
+            251
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "This paragraph is set in Helvetica, a base fourteen font without an embedded ToUnicode map, to exercise the fallback decoding path.",
+        "bbox": [
+            91,
+            268,
+            870,
+            306
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Experimental Setup",
+        "text_level": 2,
+        "bbox": [
+            93,
+            324,
+            336,
+            345
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "We follow standard evaluation protocols and report mean scores over three random seeds for every experiment in the paper.",
+        "bbox": [
+            91,
+            353,
+            857,
+            390
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "Our main contributions are summarized below:",
+        "bbox": [
+            91,
+            407,
+            524,
+            426
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "• Fast algorithm with linear time complexity in practice",
+        "bbox": [
+            94,
+            444,
+            599,
+            464
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "• Novel loss function that stabilizes early training",
+        "bbox": [
+            94,
+            481,
+            545,
+            500
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "• Comprehensive ablation across four benchmark datasets",
+        "bbox": [
+            94,
+            518,
+            630,
+            536
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "1. First numbered item about data preprocessing",
+        "bbox": [
+            93,
+            554,
+            544,
+            574
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "2. Second numbered item about model architecture",
+        "bbox": [
+            91,
+            590,
+            568,
+            609
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "A large vertical gap follows this paragraph to simulate an explicit empty block separator in the source document.",
+        "bbox": [
+            91,
+            628,
+            895,
+            666
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "After the deliberate gap, the document continues with closing remarks and acknowledgements for the reviewers.",
+        "bbox": [
+            91,
+            753,
+            777,
+            792
+        ],
+        "page_idx": 0
+    }
+]

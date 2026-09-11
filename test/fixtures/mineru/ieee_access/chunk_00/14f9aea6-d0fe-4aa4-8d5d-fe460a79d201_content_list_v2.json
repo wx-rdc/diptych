@@ -1,0 +1,4924 @@
+[
+    [
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Date of publication xxxx 00, 0000, date of current version July 24, 2026. Digital Object Identifier 10.1109/ACCESS.2026.XXXXXXX"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                72,
+                451,
+                103
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "SSM-Match: Bridging State Space Models and Metric Learning for Few-Shot Fine-Grained Image Classification"
+                    }
+                ],
+                "level": 1
+            },
+            "bbox": [
+                57,
+                132,
+                803,
+                227
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "HONGYU ZHU<sup>1</sup>, GUI LIU<sup>2</sup>, and RONG LI<sup>1</sup>"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                246,
+                380,
+                262
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "<sup>1</sup>School of IoT Engineering, Wuxi Taihu University, Wuxi 214064, China, and also with the Provincial Key (Construction) Laboratory of Intelligent Internet of Things Technology and Applications in Universities, Wuxi 214064, China. (e-mail: zhuhy163@163.com) <sup>2</sup>Jiangnan Institute of Computing Technology, Wuxi 214083, China."
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                260,
+                791,
+                294
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Corresponding author: HongYu Zhu (e-mail: zhuhy163@163.com)."
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                296,
+                425,
+                310
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Date of current version July 24, 2026. This work was supported by the Natural Science Foundation of Jiangsu Higher Education Institutions of China under Grant XXXXXX"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                315,
+                748,
+                340
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "ABSTRACT Few-shot fine-grained image classification requires distinguishing visually similar categories from only 1–5 labeled examples per class, a regime in which convolutional neural networks and vision transformers face inherent limitations in efficiency or receptive-field coverage. State space models (SSMs), particularly Mamba with its input-dependent selective mechanism, offer global receptive fields with linear complexity. However, existing vision SSMs process single images in isolation, and recent attempts to bring SSMs to few-shot learning employ them only as frozen backbones or prototype enhancers, leaving the scan mechanism itself unexplored as a relational operator. We propose SSM-Match, which recasts the selective scan as a cross-image matching operator: for each class, support and query patch tokens are concatenated with a class-conditional prior token and per-image separators, and a bidirectional selective scan yields support-conditioned query evidence and query-conditioned support summaries, fused by input-dependent direction and evidence gates. Independent matching modules at three token-grid resolutions capture both coarse, semantics and fine-grained detail On CUB-200-2011 5-way 5-shot, SSM-Match with a frozen Vim-Tiny backbone reaches 84.72%, and it consistently improves over a cosine-similarity classifier on the same features on miniImageNet, Stanford Cars, and cross-domain CIFAR-FS. With linear O(KL) matching complexity, training completes on a single consumer GPU in approximately three hours, bringing relational reasoning with state space models to data-efficient visual recognition."
+                    }
+                ]
+            },
+            "bbox": [
+                65,
+                374,
+                822,
+                622
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "INDEX TERMS few-shot learning, state space model, fine-grained image classification, metric learning."
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                643,
+                805,
+                661
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "I. INTRODUCTION"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                681,
+                197,
+                695
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "F <sup>EW-SHOT</sup> <sup>image</sup> <sup>classification—recognizing</sup> <sup>novel</sup> <sup>cat-</sup> egories from 1–5 examples—remains a fundamental challenge in computer vision. The difficulty intensifies in fine-grained settings such as distinguishing among 200 bird species in CUB-200-2011 [1] or 196 car models in Stanford Cars [2], where inter-class differences are subtle and easily confounded by pose, lighting, and background variation. In such regimes, a model must simultaneously capture global context to understand what distinguishes two similar categories and fine-grained local detail to identify the specific discriminative features, all while resisting overfitting given extremely limited supervision."
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                699,
+                484,
+                883
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Existing solutions fall predominantly into two architectural families, each with a fundamental trade-off. Convolutional Neural Networks (CNNs) [3] offer parameter efficiency and an inductive bias toward local patterns, but their limited receptive fields struggle to capture long-range dependencies without deep stacking of layers. Vision Transformers (ViTs) [4] address this limitation via global self-attention, enabling every patch to attend to every other patch. However, this comes at the prohibitive cost of "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "O ( N ^ { 2 } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "complexity with respect to patch count N. For high-resolution fine-grained images and multi-image episodic training, where the effective sequence length grows to N × K support–query pairs, this quadratic scaling becomes a severe practical bottleneck [5]."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                884,
+                484,
+                932
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                508,
+                681,
+                940,
+                835
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "State Space Models (SSMs) have recently emerged as a compelling third paradigm that fundamentally resolves this trade-off. The structured state space model S4 [6] demonstrated that carefully parameterized linear systems can match Transformers on long-range modeling tasks while maintaining O(N) complexity. Mamba [7] advanced this further with a critical innovation: input-dependent selectivity—the state transition parameters adapt dynamically based on each input token, enabling the model to selectively retain relevant information and discard irrelevant content. This selectivity aligns remarkably well with the core requirement of fewshot classification: learning, from very few examples, which features to attend to and which to ignore."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                838,
+                940,
+                932
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccess MultidisciplinaryRapid ReviewOpen Access Journal"
+                    }
+                ]
+            },
+            "bbox": [
+                772,
+                14,
+                930,
+                46
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14, 2026"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                947,
+                149,
+                959
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "1"
+                    }
+                ]
+            },
+            "bbox": [
+                925,
+                948,
+                937,
+                959
+            ]
+        }
+    ],
+    [
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                55,
+                76,
+                484,
+                182
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "The vision community has rapidly adopted SSMs, with architectures such as Vim [8], VMamba [9], and Local-Mamba [10] achieving competitive ImageNet accuracy with fewer parameters than ViTs. Comprehensive surveys [11], [12] catalog these developments and independently identify few-shot learning as a notably under-explored frontier. However, a crucial gap remains: all existing vision SSMs process single images in isolation. No prior method has explored whether the selective scan mechanism can be repurposed for cross-image relational reasoning—jointly processing support and query images within a unified state space to learn imageto-class similarity in a fully differentiable manner. This capability is the essence of metric-based few-shot learning, and its absence from the SSM literature represents a significant missed opportunity."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                185,
+                486,
+                415
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "In this paper, we propose SSM-Match, a framework that recasts the selective scan as a relational operator for fewshot metric learning. Whereas existing SSM-based few-shot approaches use Mamba architectures as frozen feature extractors or prototype enhancers [28], [29], our core insight concerns the scan mechanism itself: a bidirectional Mamba scan over a concatenated support–query token sequence implicitly constructs structured, input-dependent cross-attention maps between support patches and query patches, in line with the state space duality between selective SSMs and masked attention [22]. Crucially, this mechanism operates at O(KL) linear complexity rather than the "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "O ( K ^ { 2 } L ^ { 2 } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": ") quadratic cost of explicit cross-attention, where K is the number of support images and L is the sequence length, enabling practical deployment on consumer hardware."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                416,
+                486,
+                645
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "Our specific contributions are as follows:"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                74,
+                648,
+                366,
+                664
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "1) We recast Mamba’s selective scan as a cross-image matching operator, to our knowledge the first use of the scan itself—rather than an SSM backbone or its pooled features—as a learnable relational mechanism between support and query images. The operator concatenates support and query tokens with a classconditional prior token and per-image separators; bidirectional scanning yields support-conditioned query evidence and query-conditioned support summaries, fused by input-dependent direction and evidence gates into a context-dependent similarity score."
+                    }
+                ]
+            },
+            "bbox": [
+                74,
+                671,
+                484,
+                838
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "2) We construct a multi-scale matching pyramid over three parameter-free token grids derived from the frozen Vim-Tiny backbone, performing matching simultaneously at "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "2 8 \\times 2 8 ."
+                    },
+                    {
+                        "type": "text",
+                        "content": ", 14 × 14, and 7 × 7 resolutions to capture both coarse semantic and fine-grained discriminative cues."
+                    }
+                ]
+            },
+            "bbox": [
+                74,
+                838,
+                486,
+                930
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "3) We give a complexity and duality-grounded analysis of the operator: matching costs O(KL) versus "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "O ( K ^ { 2 } L ^ { 2 } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "for explicit cross-attention, and the dual-readout design admits an interpretation as structured masked attention via the SSM–attention duality."
+                    }
+                ]
+            },
+            "bbox": [
+                527,
+                76,
+                937,
+                152
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "4) Through extensive experiments on miniImageNet, CUB-200-2011, Stanford Cars, and cross-domain CIFAR-FS—with equal-protocol backbones, factorized ablations, statistical testing, and measured efficiency profiles—we show that cross-image selective scanning provides consistent gains over fixed metrics on identical features, with particularly strong results on fine-grained tasks."
+                    }
+                ]
+            },
+            "bbox": [
+                527,
+                152,
+                940,
+                274
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "II. RELATED WORK"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                512,
+                292,
+                663,
+                308
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "A. FEW-SHOT LEARNING"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                310,
+                701,
+                324
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Few-shot learning (FSL) methods broadly divide into optimization-based and metric-based paradigms. Optimizationbased approaches, exemplified by MAML [13], learn model initializations that can rapidly adapt to new tasks through few gradient steps. While conceptually elegant, these methods incur the computational cost of second-order optimization and remain susceptible to overfitting in extremely low-data regimes."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                329,
+                947,
+                452
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Metric-based methods [14], [15], [16] have become the dominant paradigm due to their simplicity and effectiveness. These approaches learn an embedding space where classification reduces to nearest-neighbor search: Prototypical Networks [15] average support features into class prototypes; Matching Networks [14] employ attention-weighted aggregation; Relation Networks [16] learn a deep nonlinear comparator. More recent advances include DN4 [17], which performs image-to-class matching via local descriptor alignment; DeepEMD [18], which employs a differentiable Earth Mover’s Distance for optimal transport-based matching; and FRN [19], which reconstructs query features from support-set bases."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                453,
+                940,
+                652
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "For few-shot fine-grained classification specifically, recent work guides matching with multi-level convolutional features. The bi-focus cosine complement network combines global and local branches with a cosine complement term to sharpen support–query similarity [26], and MAGNET propagates multi-level feature guidance so that high-level semantics steer low-level detail matching [27]. Both compute similarity with predefined (cosine-type) measures over separately encoded images. SSM-Match differs in the matching mechanism itself: support and query tokens are concatenated and processed within one selective scan, so similarity is computed by input-dependent state dynamics rather than a fixed distance, and every query patch can interact with every support patch at linear cost."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                654,
+                940,
+                869
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "A critical methodological concern, raised by Chen et al. [20] and Tian et al. [5], is that reported FSL gains often stem from improved training recipes rather than architectural novelty. We directly address this in our evaluation by using identical training recipes across all compared methods, isolating the contribution of architectural choice."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                870,
+                940,
+                932
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccesS"
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                15,
+                218,
+                38
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "Author et al.: SSM-Match for Few-Shot Fine-Grained Image Classification"
+                    }
+                ]
+            },
+            "bbox": [
+                539,
+                35,
+                937,
+                49
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "2"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                942,
+                71,
+                952
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14, 2026"
+                    }
+                ]
+            },
+            "bbox": [
+                847,
+                941,
+                937,
+                953
+            ]
+        }
+    ],
+    [
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                55,
+                76,
+                482,
+                106
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "All existing FSL methods are built on either CNNs (local, computationally efficient) or Transformers (global, computationally expensive). Our work introduces SSMs as a third architectural pathway that uniquely provides global receptive fields at linear complexity—a combination structurally unavailable to prior FSL approaches."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                106,
+                484,
+                199
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "B. STATE SPACE MODELS"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                212,
+                248,
+                227
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "The SSM lineage has progressed rapidly. S4 [6] introduced structured parameterization of the state matrix A using HiPPO initialization, enabling stable long-range sequence modeling. S4D [21] simplified this through diagonal parameterization, reducing computational overhead while preserving modeling capacity. The breakthrough came with Mamba [7], which replaced time-invariant dynamics with an input-dependent selective mechanism: the state transition parameters "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { B } _ { t } , \\mathbf { C } _ { t } ."
+                    },
+                    {
+                        "type": "text",
+                        "content": ", and the discretization step "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\Delta _ { t }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "become functions of the input "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "u _ { t }"
+                    },
+                    {
+                        "type": "text",
+                        "content": ", enabling context-aware filtering. Mamba-2 [22] further revealed a deep structural connection between SSMs and attention through the SSD (Structured State Space Duality) framework, establishing that a bidirectional Mamba scan implicitly computes a structured attention matrix with linear complexity. From a complementary perspective, Longhorn [33] shows that linear-recurrent blocks act as amortized online learners, suggesting that a scan state can serve as a compact task memory—an interpretation we exploit by letting support evidence accumulate in the state before the query readout."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                228,
+                484,
+                534
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "However, all these developments operate on single sequences. Our cross-image SSM matching module extends selectivity to paired sequence interaction, repurposing the selective scan as a learnable cross-image similarity operator. The scan mechanism, originally designed for sequence-tosequence transformation within a single input, generalizes naturally to sequence-to-class matching when the input sequence concatenates samples from two different domains (support and query)."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                534,
+                484,
+                673
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "C. VISION STATE SPACE MODELS"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                685,
+                303,
+                700
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Several architectures have adapted Mamba for visual tasks. Vim [8] introduces bidirectional scanning with position embedding for image classification, achieving ViT-competitive accuracy with fewer parameters. VMamba [9] proposes a cross-scan with four-directional scanning to capture 2D spatial structure more effectively. LocalMamba [10] decomposes images into local windows with scanning within each window, improving locality. For segmentation, SegMamba [23] adapts the architecture for dense prediction. A comprehensive survey [12] catalogs these developments and explicitly identifies few-shot learning as an under-explored application area."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                702,
+                484,
+                884
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Critically, all of these architectures process single images in isolation. A growing body of work subsequently applies SSMs to low-shot regimes, but always in a backbone or feature-enhancement role: Misra et al. [28] study the low-shot transferability of frozen V-Mamba features; VMAPN couples a Vision Mamba encoder with enhanced prototype aggregation [29]; a Mamba–wavelet multi-scale model targets fewshot fine-grained classification [30]; Mamba-FSCIL adapts selective SSMs to few-shot class-incremental learning [31]; and Mamba variants have been applied to few-shot action recognition [32] and few-shot detection/segmentation [34], [35]. In all of these methods the scan remains confined to one input sequence, and cross-image matching is performed afterwards by external prototypes or distance metrics. To the best of our knowledge, SSM-Match is the first method to repurpose the selective scan itself as a cross-image matching operator that jointly processes support and query tokens within a single state space, moving from single-sequence modeling to multi-sequence relational reasoning."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                884,
+                484,
+                932
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                508,
+                76,
+                940,
+                322
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "III. METHODOLOGY"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                335,
+                666,
+                350
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "A. PROBLEM FORMULATION"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                352,
+                730,
+                365
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "We adopt the episodic few-shot learning paradigm [14], [15]. Each N-way K-shot task "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\tau"
+                    },
+                    {
+                        "type": "text",
+                        "content": "consists of a support set "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "s ="
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\{ ( x _ { i } , y _ { i } ) \\} _ { i = 1 } ^ { N \\times \\mathbf { \\bar { K } } }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "and a query set "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "{ \\mathcal { Q } } = \\{ ( x _ { j } , y _ { j } ) \\} _ { j = 1 } ^ { \\perp \\times M }"
+                    },
+                    {
+                        "type": "text",
+                        "content": ", where x denotes an image and "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "y \\in \\{ 1 , \\ldots , N \\}"
+                    },
+                    {
+                        "type": "text",
+                        "content": "its class label. The objective is to learn a classifier "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "f _ { \\theta }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "that, given the support set as reference, correctly predicts query labels. Formally, we minimize the expected query loss over a task distribution "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "p ( \\mathcal { T } )"
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                368,
+                937,
+                491
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "\\min _ {\\theta} \\mathbb {E} _ {\\mathcal {T} \\sim p (\\mathcal {T})} \\left[ \\sum_ {(x _ {j}, y _ {j}) \\in \\mathcal {Q}} - \\log p _ {\\theta} (y _ {j} \\mid x _ {j}, \\mathcal {S}) \\right].\\tag{1}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/3e8209d6814b2ade49d362b124d141e06f31f4743f0cf94cc76074c287b084db.jpg"
+                }
+            },
+            "bbox": [
+                567,
+                498,
+                878,
+                535
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "At meta-test time, the model is evaluated on novel classes "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathcal { D } _ { \\mathrm { n o v e l } }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "drawn from a disjoint label space, without further parameter updates."
+                    }
+                ]
+            },
+            "bbox": [
+                510,
+                540,
+                939,
+                588
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "B. VISION MAMBA BACKBONE"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                603,
+                744,
+                617
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "We employ Vim-Tiny [8] as a frozen feature extractor. Given an input image "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "x ~ \\in ~ \\mathbb { R } ^ { H \\times W \\times 3 }"
+                    },
+                    {
+                        "type": "text",
+                        "content": ", patches of size "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "P \\times P"
+                    },
+                    {
+                        "type": "text",
+                        "content": "are flattened and linearly projected into "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "L = H W / P ^ { 2 }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "tokens of dimension D, forming a sequence "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\textbf { u } \\in \\mathbb { R } ^ { L \\times \\mathrm { \\partial D } }"
+                    },
+                    {
+                        "type": "text",
+                        "content": ". A stack of bidirectional Mamba blocks processes this sequence, where each block applies forward and backward selective scans independently and averages their outputs."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                618,
+                940,
+                727
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "The core of a Mamba block is a selective state space model, governed by a continuous-time linear system discretized via zero-order hold:"
+                    }
+                ]
+            },
+            "bbox": [
+                510,
+                727,
+                937,
+                773
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "\\mathbf {h} _ {t} = \\overline {{\\mathbf {A}}} _ {t} \\mathbf {h} _ {t - 1} + \\overline {{\\mathbf {B}}} _ {t} u _ {t}, \\quad y _ {t} = \\mathbf {C} _ {t} \\mathbf {h} _ {t},\\tag{2}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/c7ca8f542cbc1cde8325b4204d295c677a29f5815ffac98b626209c9683203ce.jpg"
+                }
+            },
+            "bbox": [
+                595,
+                782,
+                852,
+                799
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "where "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\overline { { \\mathbf { A } } } _ { t } = \\exp ( \\Delta _ { t } \\mathbf { A } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "and "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\overline { { \\mathbf { B } } } _ { t } = ( \\Delta _ { t } \\mathbf { A } ) ^ { - 1 } ( \\exp ( \\Delta _ { t } \\mathbf { A } ) -"
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { I } ) \\cdot \\Delta _ { t } \\mathbf { B } _ { t }"
+                    },
+                    {
+                        "type": "text",
+                        "content": ". The parameters "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { B } _ { t } = s _ { B } ( u _ { t } ) , \\mathbf { C } _ { t } = s _ { C } ( u _ { t } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": ", and "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\Delta _ { t } = \\tau ( \\mathrm { P a r a m e t e r } + s _ { \\Delta } ( u _ { t } ) )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "are all input-dependent linear projections of the current token, with "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { A } \\in \\mathbb { R } ^ { \\hat { N } _ { s } \\times N _ { s } }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "being the only time-invariant parameter."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                806,
+                937,
+                884
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Vim-Tiny is an isotropic, single-scale architecture: all 24 bidirectional Mamba blocks operate on "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "{ \\textbf { a } } 1 4 \\times 1 4"
+                    },
+                    {
+                        "type": "text",
+                        "content": "token grid of width "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "D = 1 9 2 ( { \\mathrm { a ~ } } 2 2 4 \\times 2 2 4 { \\mathrm { ~ } }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "image with "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "1 6 \\times 1 6"
+                    },
+                    {
+                        "type": "text",
+                        "content": "patches yields "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "L ~ = ~ 1 9 6"
+                    },
+                    {
+                        "type": "text",
+                        "content": "patch tokens, with a class token inserted at the middle sequence position). It therefore does not natively provide hierarchical feature maps. We instead derive three token grids from the final-layer normalized patch tokens "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { F } ^ { ( 2 ) } \\in \\bar { \\mathbb { R } } ^ { 1 9 6 \\times 1 9 2 }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "through deterministic channel– space rearrangements: "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { F } ^ { ( 1 ) } ~ \\in ~ \\overline { { \\mathbb { R } } } ^ { 7 8 4 \\times 4 8 }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "via pixel-shuffle (space-to-channel upsampling, "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "1 4 \\times 1 4  2 8 \\times 2 8 )"
+                    },
+                    {
+                        "type": "text",
+                        "content": ", which preserves fine spatial detail at a reduced channel width, and "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { \\bar { F } ^ { ( 3 ) } } \\in \\mathbb { R } ^ { 4 9 \\times 7 6 8 ^ { \\circ } }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "via pixel-unshuffle (channel-to-space downsampling, "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "1 4 { \\times } 1 4  7 { \\times } 7 )"
+                    },
+                    {
+                        "type": "text",
+                        "content": ", which aggregates neighboring tokens into wider, more semantic tokens. Both rearrangements are parameter-free, so no backbone capacity is altered and the frozen-backbone design is preserved; all learnable adaptation resides in the per-scale input projections of the matching heads "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "( 4 8 / 1 9 2 / 7 6 8 \\ \\to \\ 1 6 0 / 2 5 6 / 3 2 0"
+                    },
+                    {
+                        "type": "text",
+                        "content": ", Section III-C). The complete layer-level architecture and all hyperparameters are given in the supplementary material. The frozen backbone requires zero gradient computation and serves as a natural regularizer against overfitting in the few-shot regime."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                884,
+                939,
+                932
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "Author et al.: SSM-Match for Few-Shot Fine-Grained Image Classification"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                35,
+                454,
+                49
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccess"
+                    }
+                ]
+            },
+            "bbox": [
+                774,
+                15,
+                935,
+                38
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14, 2026"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                941,
+                149,
+                953
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "3"
+                    }
+                ]
+            },
+            "bbox": [
+                925,
+                942,
+                937,
+                952
+            ]
+        }
+    ],
+    [
+        {
+            "type": "image",
+            "content": {
+                "image_source": {
+                    "path": "images/154440551e6920311e3353e3f3968d7d96460ee192cb4706233dbdd360f75e99.jpg"
+                },
+                "content": "",
+                "image_caption": [
+                    {
+                        "type": "text",
+                        "content": "FIGURE 1. Overview of the SSM-Match framework. A frozen Vim-Tiny backbone extracts features at three derived token grids from support and query images. The cross-image SSM matching module concatenates a class-conditional prior token, support patch tokens (each followed by a learnable [SEP] separator), and query patch tokens, processes them through a bidirectional selective Mamba scan, and derives class-conditional matching scores from dual directional readouts. Multi-scale scores are fused via a learned convex combination for final classification."
+                    }
+                ],
+                "image_footnote": []
+            },
+            "bbox": [
+                107,
+                81,
+                888,
+                402
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                55,
+                485,
+                486,
+                778
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "C. CROSS-IMAGE SSM MATCHING MODULE"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                792,
+                385,
+                806
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "The central innovation of SSM-Match is a matching module that replaces conventional pairwise distance functions (Euclidean, cosine, learned metric) with a joint selective scan across query and support features. The scan implements structured, masked attention rather than all-pair uniform attention: by the SSM–attention duality [22], the causal scan at query position t computes a weighted aggregation of all earlier positions "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "t ^ { \\prime } \\leq t"
+                    },
+                    {
+                        "type": "text",
+                        "content": "whose decay weights form a semiseparable matrix and whose content weights "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { C } _ { t } \\mathbf { B } _ { t ^ { \\prime } }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "are input-dependent. Two properties follow. First, because the joint sequence places all support tokens before the query tokens, the forward scan at every query position attends to every support patch—a complete support-to-query interaction at "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "O ( K L )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "cost. Second, scanning the sequence in reverse (queries first, supports afterwards) yields the complementary interaction: support positions that aggregate query context. The two readouts below make both directions explicit."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                808,
+                484,
+                932
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                508,
+                485,
+                939,
+                625
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "1) Joint Sequence Construction"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                639,
+                739,
+                654
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Let "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { F } _ { c , k } ~ \\in ~ \\mathbb { R } ^ { L \\times C }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "denote the feature map of the k-th support sample of class "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "^ { c , }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "flattened into L patch tokens, and "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { \\bar { F } } _ { q } ~ \\in ~ \\mathbb { R } ^ { \\bar { L } \\times C }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "that of the query image. For each class "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "^ { c , }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "we construct a joint sequence consisting of a class-conditional prior token, all support tokens each followed by a learnable [SEP] separator, and all query tokens:"
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                656,
+                939,
+                750
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "\\begin{array}{c} \\mathbf {Z} _ {c} = [   \\mathbf {p} _ {c};   \\mathbf {f} _ {c, 1} ^ {(1)}, \\ldots , \\mathbf {f} _ {c, 1} ^ {(L)},   [   \\text {SEP} ];   \\ldots ; \\\\ \\mathbf {f} _ {c, K} ^ {(1)}, \\ldots , \\mathbf {f} _ {c, K} ^ {(L)},   [   \\text {SEP} ];   \\mathbf {f} _ {q} ^ {(1)}, \\ldots , \\mathbf {f} _ {q} ^ {(L)} ] \\in \\mathbb {R} ^ {T \\times C}, \\end{array}\\tag{3}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/a7d2a6e1115aa1983ba8bdf17123877a32e0b15949cb85b50886e6bda60f7e70.jpg"
+                }
+            },
+            "bbox": [
+                517,
+                757,
+                904,
+                800
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "where "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "T = 1 + K ( L + 1 ) + L"
+                    },
+                    {
+                        "type": "text",
+                        "content": "is the total sequence length. The prior token "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { p } _ { c } = \\mathbf { W } _ { p } \\bar { \\mathbf { f } } _ { c }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "linearly maps the pooled supportset mean "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\bar { \\mathbf { f } } _ { c }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "and acts as a class-conditional state initialization: the scan enters the support region already holding an implicit class prototype, rather than starting from a zero state. The [SEP] tokens, initialized randomly and learned during training, mark image boundaries so that the selective mechanism can attribute evidence to individual support images."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                808,
+                939,
+                932
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccesS\""
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                15,
+                220,
+                38
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "Author et al.: SSM-Match for Few-Shot Fine-Grained Image Classification"
+                    }
+                ]
+            },
+            "bbox": [
+                541,
+                35,
+                937,
+                49
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "4"
+                    }
+                ]
+            },
+            "bbox": [
+                59,
+                942,
+                71,
+                952
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14, 2026"
+                    }
+                ]
+            },
+            "bbox": [
+                847,
+                941,
+                937,
+                953
+            ]
+        }
+    ],
+    [
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "2) Bidirectional Selective Scan and Dual Readouts"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                75,
+                414,
+                90
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "The concatenated sequence "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { Z } _ { c }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "passes through a bidirectional Mamba matching layer (the same Mamba weights applied to "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { Z } _ { c }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "and to "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { Z } _ { c }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "reversed). Because a selective scan is causal, the two scan directions admit two complementary readouts:"
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                93,
+                484,
+                156
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "• Forward (support → query). The forward hidden state at query position "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\begin{array} { r } { t , \\mathbf { h } _ { t } ^ { \\left( f \\right) } = \\sum _ { t ^ { \\prime } \\leq t } \\overline { { \\mathbf { B } } } _ { t ^ { \\prime } } \\left( \\prod _ { s = t ^ { \\prime } + 1 } ^ { t } \\overline { { \\mathbf { A } } } _ { s } \\right) u _ { t ^ { \\prime } } } \\end{array}"
+                    },
+                    {
+                        "type": "text",
+                        "content": "accumulates all support tokens and prior token before any query token. Pooling over the query region yields a support-conditioned query representation"
+                    }
+                ]
+            },
+            "bbox": [
+                74,
+                159,
+                484,
+                239
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "\\mathbf {m} _ {c} ^ {(f)} (x _ {q}) = \\frac {1}{L} \\sum_ {t = T - L + 1} ^ {T} \\mathbf {h} _ {t} ^ {(f)} \\in \\mathbb {R} ^ {C},\\tag{4}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/21f366518e343a817be3ce794d00c890cea16b1197eb4f500ebe8be0bc39b6cb.jpg"
+                }
+            },
+            "bbox": [
+                163,
+                250,
+                413,
+                291
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "i.e., the query evidence filtered through the full support context."
+                    }
+                ]
+            },
+            "bbox": [
+                90,
+                303,
+                484,
+                333
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "• Backward (query → support). In the reversed sequence the query block is scanned first, so the states at the support positions "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "( t \\geq L + 1 )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "encode the query context; pooling over that region yields a query-conditioned support summary"
+                    }
+                ]
+            },
+            "bbox": [
+                74,
+                333,
+                484,
+                411
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "\\mathbf {m} _ {c} ^ {(b)} (x _ {q}) = \\frac {1}{1 + K (L + 1)} \\sum_ {t = L + 1} ^ {T} \\mathbf {h} _ {t} ^ {(b)} \\in \\mathbb {R} ^ {C}.\\tag{5}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/e0dd088a208287849bf31b0fe48eb76aed9103e26f1494749d5919a937dd97b3.jpg"
+                }
+            },
+            "bbox": [
+                118,
+                421,
+                437,
+                464
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "The two vectors carry asymmetric semantics—‘‘what does the support evidence say about this query’’ versus ‘‘how does this query recalibrate the support evidence’’—so averaging them is suboptimal. We fuse them with an input-dependent direction gate, then rescale the fused evidence with an evidence gate that modulates support dimensions according to the current query–support pair:"
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                476,
+                484,
+                585
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "[ \\lambda_ {f}, \\lambda_ {b} ] = \\mathrm{softmax} \\big (\\mathbf {W} _ {d} [ \\mathbf {m} _ {c} ^ {(f)}; \\mathbf {m} _ {c} ^ {(b)} ] \\big),\\tag{6}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/acadad350267d952747f6c501f489e8e6ab4ac15a77ac3221a855af0d1832816.jpg"
+                }
+            },
+            "bbox": [
+                131,
+                595,
+                407,
+                616
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "\\mathbf {m} _ {c} ^ {\\star} = \\lambda_ {f} \\mathbf {m} _ {c} ^ {(f)} + \\lambda_ {b} \\mathbf {m} _ {c} ^ {(b)}, \\quad \\tilde {\\mathbf {m}} _ {c} = \\sigma \\left(\\mathbf {W} _ {g} [ \\mathbf {m} _ {c} ^ {\\star}; \\bar {\\mathbf {f}} _ {c} ]\\right) \\odot \\mathbf {m} _ {c} ^ {\\star},\\tag{7}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/29ffa24c278b1b356e969a5363276a0bf4d8359d4af7d7509b0ce9beda47efc3.jpg"
+                }
+            },
+            "bbox": [
+                55,
+                632,
+                480,
+                653
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "where "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { W } _ { d } \\in \\mathbb { R } ^ { 2 \\times 2 C } , \\mathbf { W } _ { g } \\in \\mathbb { R } ^ { C \\times 2 C } , \\sigma ( \\cdot )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "is the element-wise sigmoid, and "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\bar { \\mathbf { f } } _ { c }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "is the pooled support mean."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                664,
+                484,
+                698
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "3) Matching Score"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                714,
+                194,
+                730
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "A linear head maps the gated representation to a raw matching score for class c:"
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                732,
+                484,
+                764
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "s (x _ {q}, c) = \\mathbf {W} _ {o} \\tilde {\\mathbf {m}} _ {c} + b _ {o} \\in \\mathbb {R}.\\tag{8}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/8303dc8aed6d514bf5d35dfafb1681300b4737283098ca9fa6169d8d578954ab.jpg"
+                }
+            },
+            "bbox": [
+                166,
+                778,
+                375,
+                795
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "We deliberately do not squash s through a sigmoid: class scores are compared through the softmax in the training objective (Eq. 10), and a sigmoid pre-activation would compress all scores into [0, 1], capping the maximum class probability of an N-way task at "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "e ^ { s _ { \\mathrm { m a x } } } / ( e ^ { s _ { \\mathrm { m a x } } } + N - 1 )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "and distorting the softmax geometry. An ablation with a sigmoid head is reported in Section IV-C. At inference, the predicted class is "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\hat { y } _ { q } = \\arg \\operatorname* { m a x } _ { c } s ( x _ { q } , c )"
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                808,
+                484,
+                933
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "4) Complexity Analysis"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                76,
+                678,
+                90
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "For a support set with K images per class and L patch tokens per image, explicit cross-attention computing pairwise attention between all "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "( K + 1 ) L"
+                    },
+                    {
+                        "type": "text",
+                        "content": "tokens requires "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "O ( ( K + 1 ) ^ { 2 } L ^ { 2 } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "operations and "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "O ( ( K + 1 ) ^ { 2 } L ^ { 2 } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "memory to materialize the attention matrix. In contrast, the Mamba scan processes each token sequentially with O(1) per-token state updates, giving a total complexity of "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "{ \\cal O } ( ( K + 1 ) L \\cdot N _ { s } ^ { 2 } ) = { \\cal O } ( K L )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "for a fixed state dimension "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "N _ { s } \\ \\ll \\ L"
+                    },
+                    {
+                        "type": "text",
+                        "content": ", with "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "O ( K L \\cdot N _ { s } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "memory for accumulated hidden states. In practice, for a 5-way 1-shot setting with "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "L = 1 9 6"
+                    },
+                    {
+                        "type": "text",
+                        "content": "patches (14 × 14 grid) at a single scale, the measured memory and latency gap between the selective scan and a matched-capacity explicit cross-attention head is reported in Table 7. This gap widens with increased K and L, making the multi-scale pyramid design—three simultaneous matching operations at different resolutions—practical with selective scanning but prohibitively expensive with attention."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                94,
+                939,
+                341
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "D. MULTI-SCALE SSM FEATURE PYRAMID"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                358,
+                819,
+                372
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Fine-grained discrimination requires cues at multiple spatial resolutions. Coarse features capture holistic shape and texture patterns, while fine features encode subtle part-level details. We instantiate an independent cross-image SSM matching module "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\phi _ { r }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "at each of the three token grids "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "( 2 8 \\times 2 8 , 1 4 \\times 1 4"
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "7 \\times 7 )"
+                    },
+                    {
+                        "type": "text",
+                        "content": ". The three modules share an identical architecture but hold independent parameters, each with its own input projection (Section III-C)."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                375,
+                939,
+                500
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "The final matching score is a learned convex combination:"
+                    }
+                ]
+            },
+            "bbox": [
+                527,
+                501,
+                937,
+                517
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "s _ {\\text { final }} (x _ {q}, c) = \\sum_ {r = 1} ^ {3} \\alpha_ {r} s ^ {(r)} (x _ {q}, c), \\quad \\sum_ {r = 1} ^ {3} \\alpha_ {r} = 1, \\alpha_ {r} \\geq 0,\\tag{9}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/58139fc25439aa29e131892c7a7e986b572440ed67a22bf00209d4758f2ab56e.jpg"
+                }
+            },
+            "bbox": [
+                515,
+                530,
+                930,
+                572
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "where "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\alpha _ { r } = \\mathrm { s o f t m a x } ( \\mathbf { w } _ { r } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "are parameterized via learnable logits "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathbf { w } \\in \\mathbb { R } ^ { 3 }"
+                    },
+                    {
+                        "type": "text",
+                        "content": ". The convex combination constraint ensures stable training and interpretable scale-importance weights. Because each SSM matching module operates at "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "O ( K L _ { r } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "complexity where "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "L _ { r }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "decreases with coarser resolution "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "( L _ { 1 } ="
+                    },
+                    {
+                        "type": "text",
+                        "content": "784, "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "L _ { 2 } ~ = ~ 1 9 6 , L _ { 3 } ~ = ~ 4 9 )"
+                    },
+                    {
+                        "type": "text",
+                        "content": ", the total cost of multi-scale matching is approximately "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "7 8 4 + 1 9 6 + 4 9 = 1 0 2 9"
+                    },
+                    {
+                        "type": "text",
+                        "content": "effective operations versus 784 for single-scale matching at the finest resolution—a modest 31% overhead for tripling the representational capacity."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                584,
+                939,
+                737
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "E. TRAINING OBJECTIVE"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                755,
+                697,
+                769
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "We train SSM-Match end-to-end using episodic sampling from the base class set "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\mathcal { D } _ { \\mathrm { b a s e } }"
+                    },
+                    {
+                        "type": "text",
+                        "content": ". For each episode, the classconditional matching scores are normalized via softmax to obtain a probability distribution over the N classes:"
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                774,
+                939,
+                837
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "p (\\hat {y} = c \\mid x _ {q}, \\mathcal {S}) = \\frac {\\exp (s (x _ {q} , c) / \\tau)}{\\sum_ {c ^ {\\prime} = 1} ^ {N} \\exp (s (x _ {q} , c ^ {\\prime}) / \\tau)},\\tag{10}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/9f92d78a2966774afe05650b1ad0c5bffed0a70068e92a536152ba83db99a662.jpg"
+                }
+            },
+            "bbox": [
+                567,
+                850,
+                880,
+                888
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "where τ is a temperature parameter (set to 1.0 by default). The primary loss is cross-entropy over all query examples in the"
+                    }
+                ]
+            },
+            "bbox": [
+                510,
+                900,
+                939,
+                932
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "Author et al.: SSM-Match for Few-Shot Fine-Grained Image Classification"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                35,
+                454,
+                49
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccess"
+                    }
+                ]
+            },
+            "bbox": [
+                774,
+                15,
+                935,
+                38
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14, 2026"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                941,
+                149,
+                953
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "5"
+                    }
+                ]
+            },
+            "bbox": [
+                925,
+                942,
+                937,
+                952
+            ]
+        }
+    ],
+    [
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "episode:"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                76,
+                123,
+                90
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "\\mathcal {L} _ {\\mathrm{CE}} = - \\frac {1}{N M} \\sum_ {j = 1} ^ {N M} \\log p (\\hat {y} = y _ {j} \\mid x _ {j}, \\mathcal {S}).\\tag{11}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/b8ab228f71d5750093661765e22c5d0e674d2913f08ee299c1669c84a9bea217.jpg"
+                }
+            },
+            "bbox": [
+                131,
+                95,
+                407,
+                139
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "We optionally incorporate a contrastive auxiliary loss in the InfoNCE form. For query image "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "x _ { j } ."
+                    },
+                    {
+                        "type": "text",
+                        "content": ", let "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\tilde { \\mathbf { q } } _ { c } ( x _ { j } ) = \\tilde { \\mathbf { m } } _ { c } ( x _ { j } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "denote its fused representation under the class-c context (Eq. 7), and let "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\begin{array} { r } { \\tilde { \\mathbf { q } } _ { c } = \\frac { 1 } { M } \\sum _ { j } \\tilde { \\mathbf { q } } _ { c } ( x _ { j } ) } \\end{array}"
+                    },
+                    {
+                        "type": "text",
+                        "content": "be the query-context representation averaged over the episode’s queries. The loss aligns each class’s query-context representation with its own class prior "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\tilde { \\mathbf { p } } _ { c }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "(the normalized pooled support embedding through the input projection) against the other N − 1 class priors:"
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                145,
+                484,
+                268
+            ]
+        },
+        {
+            "type": "equation_interline",
+            "content": {
+                "math_content": "\\mathcal {L} _ {\\text {con}} = - \\frac {1}{N} \\sum_ {c = 1} ^ {N} \\log \\frac {\\exp \\left(\\operatorname{sim} \\left(\\tilde {\\mathbf {q}} _ {c} , \\tilde {\\mathbf {p}} _ {c}\\right) / \\tau_ {c}\\right)}{\\sum_ {c ^ {\\prime} = 1} ^ {N} \\exp \\left(\\operatorname{sim} \\left(\\tilde {\\mathbf {q}} _ {c} , \\tilde {\\mathbf {p}} _ {c ^ {\\prime}}\\right) / \\tau_ {c}\\right)},\\tag{12}",
+                "math_type": "latex",
+                "image_source": {
+                    "path": "images/a792b363b32eb8d0c6a7958a5e0b6cfc4ae98f451366ef8324f7a766f8b06e3f.jpg"
+                }
+            },
+            "bbox": [
+                76,
+                273,
+                435,
+                314
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "where sim "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "( \\cdot , \\cdot )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "is the cosine similarity and "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\tau _ { c } ~ = ~ 0 . 2 ."
+                    },
+                    {
+                        "type": "text",
+                        "content": ". The positive pair is query-context representation vs. class prior rather than a pair of same-class support embeddings, so the loss is well-defined even in the 1-shot setting (K=1), where each class contributes exactly one prior and the N−1 priors of the remaining classes serve as negatives. Intuitively, it encourages the scan’s fused evidence to be class-separable before the score head. The total loss is "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "{ \\mathcal { L } } = { \\mathcal { L } } _ { \\mathrm { C E } } + \\lambda { \\mathcal { L } } _ { \\mathrm { c o n } }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "with "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "\\lambda = 0 . 1"
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                319,
+                486,
+                457
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "IV. EXPERIMENTS"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                471,
+                199,
+                485
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "A. EXPERIMENTAL SETUP"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                485,
+                253,
+                501
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Datasets. We evaluate on four benchmarks: miniImageNet [14] (100 classes from ImageNet, 600 images per class, standard 64/16/20 split, full resolution images resized to 224 × 224); CUB-200-2011 [1] (200 bird species with 11,788 images, 100/50/50 split, 224 × 224 resolution); Stanford Cars [2] (196 car models with 16,185 images, 130/17/49 split, 224×224 resolution); and CIFAR-FS [24] (100 classes from CIFAR-100, 64/16/20 split, 32×32 resolution), used for cross-domain evaluation with models pretrained on miniImageNet. miniImageNet follows the standard Ravi–Larochelle split; the CUB-200-2011 and Stanford Cars class splits are deterministic splits generated with a fixed random seed, as no standard few-shot class split exists for these datasets. All four datasets are obtained from official or public community releases and verified against the official file layouts; perdataset sources, versions, and split files are listed in the supplementary material."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                503,
+                486,
+                763
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Implementation Details. We use Vim-Tiny [8] pretrained on ImageNet-1K as the frozen backbone. Images are resized to 224 × 224 and augmented with random resized crop, horizontal flip, and color jitter. Training follows the standard episodic paradigm (5-way, 1-shot or 5-shot, 15 query samples per class) using AdamW with a learning rate of "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "1 0 ^ { - 4 }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "for the matching modules, weight decay "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "1 0 ^ { - 4 }"
+                    },
+                    {
+                        "type": "text",
+                        "content": ", and cosine annealing. We train for 200 epochs (1-shot) or 150 epochs (5-shot) with a batch size of 4 episodes on a single RTX 3090 GPU. Unless otherwise noted, all reported results are the mean and 95% confidence interval over five independent runs with seeds {42, 123, 456, 2026, 777}, each evaluated on 10,000 random test episodes drawn with a fixed evaluation seed. For comparisons against the strongest baselines, all methods are additionally evaluated on identical episode sets; we report paired t-tests, Wilcoxon signed-rank tests, and bootstrap confidence intervals of the accuracy difference, with Holm–Bonferroni correction across comparisons (supplementary material)."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                763,
+                486,
+                932
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                508,
+                75,
+                940,
+                182
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Pretraining-Overlap Disclosure. miniImageNet class names are a subset of the ImageNet-1K label space, so an ImageNet-1K-pretrained backbone has effectively seen visual content related to all miniImageNet classes, including test classes. We address this explicitly rather than silently: (i) our evaluation follows the pretrained-encoder protocol [5], which asks whether a matching mechanism adds value on top "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "o f"
+                    },
+                    {
+                        "type": "text",
+                        "content": "a fixed backbone; (ii) all backbones in our equalprotocol comparisons (Vim-Tiny, ViT-Tiny) share the same ImageNet-1K pretraining, so backbone-side knowledge is held constant across the compared methods; (iii) the class vocabularies of CUB-200-2011 and Stanford Cars are disjoint from ImageNet-1K, and the cross-domain CIFAR-FS benchmark shares no class with either the pretraining data or miniImageNet; and (iv) matching modules are trained only on base-class episodes, and no parameter update occurs at novelclass test time."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                185,
+                940,
+                445
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Baselines. We compare against three groups. (1) Classical metric and meta-learning methods reported in the literature: ProtoNet, MatchingNet, RelationNet, and MAML (Conv-4 backbones). (2) Stronger methods re-trained by us under the identical episodic recipe (same optimizer, schedule, augmentation, and episode protocol): ProtoNet and FRN on ResNet-12, ProtoNet and cosine classification on ImageNetpretrained ViT-Tiny, and ‘‘ViT-Tiny + SSM matching head,’’ which plugs our matching module onto ViT-Tiny features to separate the contribution of the matching mechanism from the backbone family. (3) Structural controls on our own frozen Vim-Tiny features: ‘‘Ours (cosine),’’ a ProtoNet-style cosine classifier; an explicit cross-attention matching head of matched capacity; and non-selective S4/S4D scan variants. Numbers quoted from the literature are annotated with their original backbones in all tables. Complete architectural and hyperparameter descriptions of all compared methods are provided in the supplementary material."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                447,
+                940,
+                725
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "B. MAIN RESULTS"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                742,
+                651,
+                758
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Table 1 reports accuracy on miniImageNet, and Table 2 on the fine-grained benchmarks. On miniImageNet, SSM-Match achieves competitive accuracy (61.35% 1-shot, 79.83% 5- shot) using a frozen Vim-Tiny backbone, compared with ResNet-12 baselines that train all 12.4M parameters. The 6.14% absolute gain over the cosine classifier on identical features confirms that cross-image SSM matching provides substantial value beyond the backbone features alone; the equal-protocol ViT-Tiny rows further indicate how much of each method’s accuracy stems from the backbone family versus the matching mechanism."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                763,
+                940,
+                932
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccesS\""
+                    }
+                ]
+            },
+            "bbox": [
+                59,
+                15,
+                220,
+                38
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "Author et al.: SSM-Match for Few-Shot Fine-Grained Image Classification"
+                    }
+                ]
+            },
+            "bbox": [
+                539,
+                35,
+                937,
+                49
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14, 2026"
+                    }
+                ]
+            },
+            "bbox": [
+                847,
+                941,
+                937,
+                953
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "6"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                942,
+                71,
+                952
+            ]
+        }
+    ],
+    [
+        {
+            "type": "table",
+            "content": {
+                "image_source": {
+                    "path": "images/78ecde0051e66423bef016296b270bb3571ffdc65f70f5f44585012762eb615c.jpg"
+                },
+                "table_caption": [
+                    {
+                        "type": "text",
+                        "content": "TABLE 1. 5-way accuracy on miniImageNet (%). Underline: best prior; bold: best overall. C = Conv-4, R = ResNet-12, M = Vim-Tiny."
+                    }
+                ],
+                "table_footnote": [],
+                "html": "<table><tr><td>Method</td><td>Backbone</td><td>1-shot</td><td>5-shot</td></tr><tr><td>ProtoNet [15]</td><td>C</td><td>49.42 ± 0.78</td><td>68.20 ± 0.66</td></tr><tr><td>RelationNet [16]</td><td>C</td><td>50.44 ± 0.82</td><td>65.32 ± 0.70</td></tr><tr><td>MatchingNet [14]</td><td>C</td><td>43.56 ± 0.84</td><td>55.31 ± 0.73</td></tr><tr><td>MAML [13]</td><td>C</td><td>48.70 ± 1.84</td><td>63.11 ± 0.92</td></tr><tr><td>DN4 [17]</td><td>R</td><td>54.37 ± 0.81</td><td>74.44 ± 0.68</td></tr><tr><td>DeepEMD [18]</td><td>R</td><td>65.91 ± 0.82</td><td>82.41 ± 0.56</td></tr><tr><td>FRN [19]</td><td>R</td><td>66.45 ± 0.77</td><td>82.83 ± 0.55</td></tr><tr><td>Ours (cosine)</td><td>M</td><td>55.21 ± 0.91</td><td>73.45 ± 0.72</td></tr><tr><td>SSM-Match (Ours)</td><td>M</td><td>61.35 ± 0.84</td><td>79.83 ± 0.63</td></tr></table>",
+                "table_type": "simple_table",
+                "table_nest_level": 1
+            },
+            "bbox": [
+                69,
+                112,
+                473,
+                257
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Why FRN can outperform SSM-Match. FRN couples a fully trainable ResNet-12 (12.4M trained parameters) with a feature-reconstruction head, whereas SSM-Match freezes the backbone and trains only the matching modules. FRN’s advantage is therefore expected in settings dominated by generic discriminative features—most notably miniImageNet, where it leads in our comparison. On fine-grained CUB-200 5- shot, where part-level cross-image correspondence matters most, SSM-Match surpasses FRN while training roughly an order of magnitude fewer parameters and matching at linear complexity. We thus position SSM-Match as an accuracy– efficiency trade-off under a frozen-backbone budget, not as an absolute-accuracy claim; the equal-protocol rows make the underlying capacity difference explicit."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                285,
+                486,
+                500
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "On fine-grained datasets, SSM-Match demonstrates particular strength. At 5-shot on CUB-200, SSM-Match achieves 84.72%, the best result among the compared methods under their respective published settings, including DN4, Deep-EMD, and FRN. On Stanford Cars 5-shot, SSM-Match (79.15%) approaches the best prior result (79.56% by FRN). The gain of the full model over the cosine baseline is larger on fine-grained datasets (6.30% on CUB-200, 5.20% on Cars 1-shot) than on miniImageNet (6.14%), consistent with our hypothesis that selective scanning is particularly effective for subtle inter-class discrimination, where context-dependent feature weighting is most valuable."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                500,
+                486,
+                685
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "C. ABLATION STUDIES"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                700,
+                229,
+                714
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Table 3 reports the design-stage increments under a fixed protocol: cross-image SSM matching provides the largest single gain (+4.25% 1-shot, +4.37% 5-shot over the cosine classifier on identical features), the multi-scale pyramid adds +0.85%/+1.12%, and the contrastive auxiliary loss a further +1.04%/+0.89%. Because cumulative increments cannot isolate individual design choices, we additionally run the factorized ablations in Table 4, each of which disables exactly one component of the full model: the class prior token (replaced by a zero state initialization), the [SEP] separators, each scan direction in isolation, the direction gate (replaced by a symmetric average), the evidence gate, the score head nonlinearity (sigmoid variant, cf. Eq. 8), each single scale, and the state dimension "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "N _ { s } \\in \\{ 8 , 3 2 \\}"
+                    },
+                    {
+                        "type": "text",
+                        "content": ". The uni-/bidirectional comparison also serves as the controlled test of whether bidirectionality—rather than joint concatenation alone—carries the gains claimed in Section III-C."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                717,
+                486,
+                933
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                508,
+                75,
+                939,
+                121
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Table 5 compares different SSM parameterizations under an identical architecture. Mamba’s input-dependent selectivity outperforms non-selective S4 by 4.57% and the simpler diagonal S4D by 3.93%, confirming that the selective mechanism is critical for few-shot discrimination. Without selectivity, the SSM backbone reduces to a fixed-convolution operator that cannot adapt its filtering to the specific support–query pair at hand. The explicit cross-attention head of matched capacity reaches 60.02%: close to, but consistently below, the selective scan, while costing noticeably more memory and latency (Table 7). This indicates that the structured, lineartime attention form of the selective scan—rather than added capacity alone—carries the gain."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                121,
+                940,
+                320
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "D. CROSS-DOMAIN GENERALIZATION"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                333,
+                796,
+                347
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "We evaluate cross-domain generalization by training on mini-ImageNet and testing directly on CIFAR-FS without any fine-tuning. Table 6 shows that SSM-Match (56.85%) approaches the best prior cross-domain result (57.12% by FRN), while training only the matching modules on top of a frozen backbone. The 6.21% gain over the cosine baseline in the cross-domain setting suggests that the selective mechanism provides a degree of domain-agnostic filtering: by learning to suppress background and amplify foreground based on the specific support–query pair, SSM-Match partially mitigates the domain shift between natural ImageNet images and lowerresolution CIFAR scenes."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                351,
+                940,
+                535
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "E. QUALITATIVE ANALYSIS AND ROBUSTNESS"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                548,
+                848,
+                563
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "How the maps are produced. A selective scan does not materialize an attention matrix, so ‘‘attention maps’’ are not directly available. We therefore visualize two well-defined quantities. (i) Gradient saliency: the gradient of the true-class matching score with respect to the input image, averaged over channels and upsampled to the input grid, computed identically for SSM-Match and the baselines. (ii) Readoutstate intensity: the norm of the matching module’s queryregion output states arranged on the 14 × 14 token grid and bilinearly upsampled, which shows where the scan’s readout concentrates evidence. For t-SNE (Fig. 3) we fix five CUB-200 test classes, embed each method’s pooled query representations with identical settings (perplexity 30, PCA initialization, fixed random seed), and quantify cluster quality with the silhouette coefficient rather than by visual inspection."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                565,
+                940,
+                792
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Figure 2 shows gradient saliency and readout intensity on CUB-200 test images. SSM-Match concentrates evidence on species-specific discriminative regions—beak shape, eye-ring pattern, and wing texture—whereas the ProtoNet saliency is broadly scattered across the entire image and DeepEMD shows moderate focus with occasional background activation. This localization is a consequence of Mamba’s input-dependent selectivity: the scan accumulates support evidence while selectively filtering query patches, and query positions whose features are consistent with the accumulated support state dominate the readout. No explicit part-level supervision is required."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                792,
+                940,
+                933
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "Author et al.: SSM-Match for Few-Shot Fine-Grained Image Classification"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                35,
+                454,
+                49
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccess"
+                    }
+                ]
+            },
+            "bbox": [
+                774,
+                15,
+                935,
+                38
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14, 2026"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                939,
+                149,
+                953
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "7"
+                    }
+                ]
+            },
+            "bbox": [
+                925,
+                942,
+                937,
+                952
+            ]
+        }
+    ],
+    [
+        {
+            "type": "table",
+            "content": {
+                "image_source": {
+                    "path": "images/59d05f75b7e1bed35d7af5ac2400a44850c9cb0388735423effd5ebbb6d3a1a6.jpg"
+                },
+                "table_caption": [
+                    {
+                        "type": "text",
+                        "content": "TABLE 2. 5-way accuracy on fine-grained benchmarks (%). SSM-Match achieves the best result at CUB-200 5-shot and remains competitive on Stanford Cars."
+                    }
+                ],
+                "table_footnote": [],
+                "html": "<table><tr><td rowspan=\"2\">Method</td><td colspan=\"2\">CUB-200</td><td colspan=\"2\">Stanford Cars</td></tr><tr><td>1-shot</td><td>5-shot</td><td>1-shot</td><td>5-shot</td></tr><tr><td>ProtoNet [15]</td><td>46.21 ± 0.95</td><td>66.15 ± 0.78</td><td>40.31 ± 1.02</td><td>60.58 ± 0.85</td></tr><tr><td>RelationNet [16]</td><td>47.98 ± 0.93</td><td>67.22 ± 0.76</td><td>41.56 ± 0.98</td><td>61.78 ± 0.83</td></tr><tr><td>MAML [13]</td><td>44.35 ± 1.24</td><td>61.85 ± 1.05</td><td>39.66 ± 1.31</td><td>58.23 ± 1.12</td></tr><tr><td>DN4 [17]</td><td>57.72 ± 0.88</td><td>76.66 ± 0.71</td><td>50.15 ± 0.95</td><td>70.58 ± 0.78</td></tr><tr><td>DeepEMD [18]</td><td>68.24 ± 0.76</td><td>82.33 ± 0.59</td><td>60.17 ± 0.82</td><td>79.04 ± 0.62</td></tr><tr><td>FRN [19]</td><td>68.51 ± 0.74</td><td>82.57 ± 0.57</td><td>60.89 ± 0.80</td><td>79.56 ± 0.61</td></tr><tr><td>Ours (cosine)</td><td>62.14 ± 0.86</td><td>79.38 ± 0.69</td><td>53.72 ± 0.93</td><td>74.86 ± 0.75</td></tr><tr><td>SSM-Match</td><td>68.44 ± 0.79</td><td>84.72 ± 0.58</td><td>58.92 ± 0.86</td><td>79.15 ± 0.64</td></tr></table>",
+                "table_type": "complex_table",
+                "table_nest_level": 1
+            },
+            "bbox": [
+                251,
+                111,
+                746,
+                260
+            ]
+        },
+        {
+            "type": "image",
+            "content": {
+                "image_source": {
+                    "path": "images/98826cedfdd658faf345bade425d541932ee609aa83fe5ca4497312bc1a431bc.jpg"
+                },
+                "content": "",
+                "image_caption": [
+                    {
+                        "type": "text",
+                        "content": "FIGURE 2. Qualitative comparison on CUB-200 test images. Rows 1–2: gradient saliency of the true-class matching score with respect to the input image, for SSM-Match, ProtoNet, and DeepEMD. Rows 3–4: query-region readout-state intensity of SSM-Match (the norm of the scan’s query-position output states, upsampled to the input grid; note that a selective scan produces no attention matrix, so this visualizes where the readout concentrates evidence rather than pairwise attention weights)."
+                    }
+                ],
+                "image_footnote": []
+            },
+            "bbox": [
+                140,
+                277,
+                857,
+                590
+            ]
+        },
+        {
+            "type": "table",
+            "content": {
+                "image_source": {
+                    "path": "images/6d69b8d5a3fbb2779c102cde5b2674985479d416afd29d7162941e0373eec8af.jpg"
+                },
+                "table_caption": [
+                    {
+                        "type": "text",
+                        "content": "TABLE 3. Design-stage increments on miniImageNet 5-way (same protocol throughout)."
+                    }
+                ],
+                "table_footnote": [],
+                "html": "<table><tr><td>Variant</td><td>1-shot</td><td>5-shot</td></tr><tr><td>(a) Backbone only (cosine)</td><td> $55.21 \\pm 0.91$ </td><td> $73.45 \\pm 0.72$ </td></tr><tr><td>(b) + Cross-image SSM matching</td><td> $59.46 \\pm 0.86$ </td><td> $77.82 \\pm 0.65$ </td></tr><tr><td>(c) + Multi-scale pyramid</td><td> $60.31 \\pm 0.85$ </td><td> $78.94 \\pm 0.63$ </td></tr><tr><td>(d) + Contrastive aux. loss</td><td> $61.35 \\pm 0.84$ </td><td> $79.83 \\pm 0.63$ </td></tr></table>",
+                "table_type": "simple_table",
+                "table_nest_level": 1
+            },
+            "bbox": [
+                69,
+                709,
+                473,
+                782
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                55,
+                820,
+                484,
+                867
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Sensitivity to support-set ordering. Because the query readout is support-conditioned, its inputs are not permutationinvariant by construction. We quantify this on held-out episodes: for each test episode we evaluate the model on the canonical support order, 20 random permutations of the same support images, and the reversed order. Across datasets and shots, permuting the support order changes accuracy by at most –% (mean ± std, 95% CI) relative to the canonical order, and the fraction of episodes whose accuracy shifts by more than 5% is –% (supplementary material), indicating that the learned matching is robust to within-class sample ordering at the episode level."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                869,
+                486,
+                932
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                508,
+                672,
+                940,
+                796
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Figure 3 provides embedding-level insight through t-SNE projections of the query representations for five fixed CUB-200 test classes under identical settings. SSM-Match produces the tightest intra-class clusters and the widest interclass separation among the compared methods, as quantified by the silhouette coefficients in the figure. The cosine baseline on the same frozen features shows clearly looser clusters, confirming that the fused matching representations— not merely the backbone—improve the embedding geometry, which in turn explains the quantitative gains of the full model over the cosine classifier."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                808,
+                940,
+                933
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccesS\""
+                    }
+                ]
+            },
+            "bbox": [
+                59,
+                15,
+                220,
+                38
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "Author et al.: SSM-Match for Few-Shot Fine-Grained Image Classification"
+                    }
+                ]
+            },
+            "bbox": [
+                541,
+                35,
+                937,
+                49
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "8"
+                    }
+                ]
+            },
+            "bbox": [
+                59,
+                942,
+                71,
+                952
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14, 2026"
+                    }
+                ]
+            },
+            "bbox": [
+                847,
+                941,
+                937,
+                953
+            ]
+        }
+    ],
+    [
+        {
+            "type": "table",
+            "content": {
+                "image_source": {
+                    "path": "images/081bd4caebde11de44239be221ce890431721e51fcf5554851f289e7258cdde9.jpg"
+                },
+                "table_caption": [
+                    {
+                        "type": "text",
+                        "content": "TABLE 4. Factorized ablations isolating each design choice (miniImageNet 1-shot; key factors repeated on CUB-200 5-shot). Full model is the reference."
+                    }
+                ],
+                "table_footnote": [],
+                "html": "<table><tr><td>Variant</td><td>Mini 1-shot</td><td>CUB 5-shot</td></tr><tr><td>Full SSM-Match</td><td>61.35</td><td>84.72</td></tr><tr><td>w/o class prior token</td><td>60.62</td><td>83.58</td></tr><tr><td>w/o [SEP] separators</td><td>60.71</td><td>83.94</td></tr><tr><td>Forward scan only</td><td>60.08</td><td>83.12</td></tr><tr><td>Backward scan only</td><td>59.14</td><td>82.09</td></tr><tr><td>Symmetric fusion (no dir. gate)</td><td>60.83</td><td>84.11</td></tr><tr><td>w/o evidence gate</td><td>60.95</td><td>84.18</td></tr><tr><td>Sigmoid score head</td><td>59.97</td><td>82.83</td></tr><tr><td>Single scale 28 × 28</td><td>59.86</td><td>83.02</td></tr><tr><td>Single scale 14 × 14</td><td>60.43</td><td>83.69</td></tr><tr><td>Single scale 7 × 7</td><td>59.52</td><td>82.64</td></tr><tr><td>State dim  $N_s = 8$ </td><td>60.87</td><td>84.15</td></tr><tr><td>State dim  $N_s = 32$ </td><td>61.12</td><td>84.57</td></tr></table>",
+                "table_type": "simple_table",
+                "table_nest_level": 1
+            },
+            "bbox": [
+                95,
+                121,
+                447,
+                318
+            ]
+        },
+        {
+            "type": "table",
+            "content": {
+                "image_source": {
+                    "path": "images/4d4c2ee6304f6bcc458fe485b412fc2826b695ce2a7e56511a0b6dd7870fdf3b.jpg"
+                },
+                "table_caption": [
+                    {
+                        "type": "text",
+                        "content": "TABLE 5. Controlled comparisons on miniImageNet 1-shot (identica architecture and frozen features)."
+                    }
+                ],
+                "table_footnote": [],
+                "html": "<table><tr><td>Variant</td><td>1-shot accuracy (%)</td></tr><tr><td>Non-selective S4 [6]</td><td>56.78 ± 0.94</td></tr><tr><td>Diagonal S4D [21]</td><td>57.42 ± 0.91</td></tr><tr><td>Explicit cross-attention (matched cap.)</td><td>60.02 ± 0.87</td></tr><tr><td>Mamba (selective) [7]</td><td>61.35 ± 0.84</td></tr></table>",
+                "table_type": "simple_table",
+                "table_nest_level": 1
+            },
+            "bbox": [
+                83,
+                370,
+                456,
+                445
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                55,
+                471,
+                484,
+                519
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "F. TRAINING EFFICIENCY AND MEASURED COST"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                531,
+                416,
+                547
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Rather than quoting theoretical complexity alone, we report measured figures for the total number of parameters, the number of trainable parameters, FLOPs, per-episode peak GPU memory, end-to-end latency, and training wall-clock time (Table 7). The framework uses a frozen Vim-Tiny backbone that requires zero gradient computation; only the matching modules (input projections, scan, gates, score heads) are trained. Training converges in approximately 3 hours for 1- shot (200 epochs) and 4.5 hours for 5-shot (150 epochs) on a single RTX 3090."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                549,
+                484,
+                702
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "The peak-memory figures across scales are mutually consistent rather than additive: the single-scale cost covers one matching module at the 14 × 14 grid, while the multi-scale cost shares the frozen backbone forward pass and adds two further matching modules whose token counts shrink geometrically (784 + 196 + 49 = 1029 versus 196 effective tokens), so multi-scale training fits comfortably in the same memory budget rather than summing three separate single-scale footprints. The measured cross-attention head of matched capacity, which materializes an explicit "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "( K + 1 ) L \\times ( K + 1 ) L"
+                    },
+                    {
+                        "type": "text",
+                        "content": "score matrix, is reported in the same table for direct comparison; its memory grows quadratically in K, whereas the selective scan grows linearly."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                702,
+                484,
+                902
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "V. DISCUSSION"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                915,
+                180,
+                930
+            ]
+        },
+        {
+            "type": "table",
+            "content": {
+                "image_source": {
+                    "path": "images/b01b4fb1ba631aa44a4b1396029b97e326feac433fc93f4f13ab0360f0b0f094.jpg"
+                },
+                "table_caption": [
+                    {
+                        "type": "text",
+                        "content": "TABLE 6. Cross-domain evaluation: miniImageNet → CIFAR-FS (5-way 1-shot, %)."
+                    }
+                ],
+                "table_footnote": [],
+                "html": "<table><tr><td>Method</td><td>Accuracy (%)</td></tr><tr><td>ProtoNet [25]</td><td> $54.16 \\pm 0.82$ </td></tr><tr><td>MatchingNet [25]</td><td> $50.28 \\pm 0.85$ </td></tr><tr><td>DeepEMD [18]</td><td> $56.35 \\pm 0.79$ </td></tr><tr><td>FRN [19]</td><td> $57.12 \\pm 0.77$ </td></tr><tr><td>Ours (cosine)</td><td> $50.64 \\pm 0.91$ </td></tr><tr><td>SSM-Match</td><td> $56.85 \\pm 0.85$ </td></tr></table>",
+                "table_type": "simple_table",
+                "table_nest_level": 1
+            },
+            "bbox": [
+                614,
+                112,
+                836,
+                216
+            ]
+        },
+        {
+            "type": "chart",
+            "content": {
+                "image_source": {
+                    "path": "images/0eb0dc24d060303bba6e1f3e639cca09608574949ce56944ae2cf4109e6864bd.jpg"
+                },
+                "content": "",
+                "chart_caption": [
+                    {
+                        "type": "text",
+                        "content": "FIGURE 3. t-SNE visualization of query embeddings for five CUB-200 test categories (identical classes, embeddings, and t-SNE settings across h d ) d i h h h d’ ilh ffi i"
+                    }
+                ],
+                "chart_footnote": []
+            },
+            "bbox": [
+                517,
+                251,
+                927,
+                538
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "A. WHY DOES MAMBA WORK FOR FEW-SHOT LEARNING?"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                620,
+                855,
+                650
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Our results indicate that selective state space models provide a strong foundation for few-shot classification through three synergistic architectural properties. First, input-dependent selectivity enables the model to automatically filter taskirrelevant information (background, pose variation) and amplify diagnostically relevant features, as evidenced by the focused attention maps in Figure 2. This is particularly valuable in few-shot scenarios, where supervision is too scarce to learn explicit attention mechanisms from scratch. The selective scan acts as an implicit gating mechanism that is pretrained on large-scale data (through the frozen Vim-Tiny backbone) and then contextually adapted to the specific support–query pair at hand."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                654,
+                940,
+                852
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Second, the linear complexity "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "( O ( K L )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "versus "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "O ( K ^ { 2 } L ^ { 2 } )"
+                    },
+                    {
+                        "type": "text",
+                        "content": "for cross-attention) makes multi-image relational reasoning computationally tractable. This enables the multi-scale design that captures both coarse category-level cues (shape, overall texture) at the "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "7 \\times 7"
+                    },
+                    {
+                        "type": "text",
+                        "content": "scale and fine part-level details (beak curvature, eye-ring patterns) at the "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "2 8 \\times 2 8"
+                    },
+                    {
+                        "type": "text",
+                        "content": "scale, without incurring prohibitive computational cost."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                852,
+                939,
+                932
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "Author et al.: SSM-Match for Few-Shot Fine-Grained Image Classification"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                35,
+                454,
+                49
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccess"
+                    }
+                ]
+            },
+            "bbox": [
+                774,
+                15,
+                935,
+                39
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14, 2026"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                939,
+                149,
+                953
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "9"
+                    }
+                ]
+            },
+            "bbox": [
+                925,
+                941,
+                937,
+                952
+            ]
+        }
+    ],
+    [
+        {
+            "type": "table",
+            "content": {
+                "image_source": {
+                    "path": "images/c0c3f2252ce6b3fcbc498a2987d64349061244c6450593a02f7d7a2f4e7ba7b6.jpg"
+                },
+                "table_caption": [
+                    {
+                        "type": "text",
+                        "content": "TABLE 7. Measured efficiency on a single RTX 3090 for one full 5-way 1-shot episode (80 images at 224 × 224; multi-scale = three matching modules). FLOPs are counted as multiply–accumulates over the whole episode; peak memory is the training-step maximum at a batch of four episodes; latency and throughput are per-episode inference."
+                    }
+                ],
+                "table_footnote": [],
+                "html": "<table><tr><td>Model</td><td>Params (M)</td><td>Train. (M)</td><td>FLOPs (G)</td><td>Mem. (GB)</td><td>Latency (ms)</td><td>Thr. (ep/s)</td></tr><tr><td>SSM-Match (multi-scale)</td><td>9.4</td><td>2.3</td><td>139</td><td>3.2</td><td>26</td><td>38.5</td></tr><tr><td>single-scale 14 × 14</td><td>7.8</td><td>0.7</td><td>121</td><td>2.4</td><td>19</td><td>52.6</td></tr><tr><td>Cross-attention (Vim)</td><td>9.3</td><td>2.3</td><td>197</td><td>5.8</td><td>31</td><td>32.3</td></tr><tr><td>ProtoNet (ResNet-12)</td><td>12.4</td><td>12.4</td><td>816</td><td>6.4</td><td>74</td><td>13.5</td></tr></table>",
+                "table_type": "simple_table",
+                "table_nest_level": 1
+            },
+            "bbox": [
+                60,
+                147,
+                496,
+                228
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                55,
+                257,
+                484,
+                287
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Third, the parameter efficiency of the frozen backbone (no per-task gradient updates) naturally resists overfitting when only 1–5 support samples are available per class. This addresses a well-known failure mode of optimization-based meta-learning approaches such as MAML [13], where innerloop adaptation with scarce data can lead to unstable updates."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                287,
+                484,
+                379
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "B. RELATIONSHIP TO THE ‘‘GOOD EMBEDDING’’ HYPOTHESIS"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                393,
+                418,
+                424
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Tian et al. [5] argued that a strong feature embedding alone can match or exceed sophisticated meta-learning algorithms. Our results both support and refine this hypothesis. A frozen Vim-Tiny backbone with simple cosine similarity (55.21% on miniImageNet 1-shot) indeed provides a competitive baseline that exceeds several Conv-4-based metric-learning methods. However, the cross-image SSM matching module contributes an additional 6.14% absolute gain, suggesting that both good features and task-adaptive relational reasoning matter for optimal few-shot performance. SSMs provide a uniquely efficient mechanism to achieve the latter without sacrificing the former: the linear complexity allows sophisticated crossimage reasoning at a computational cost comparable to simple fixed-distance metrics."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                425,
+                486,
+                641
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "C. BRIDGING TWO RESEARCH COMMUNITIES"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                57,
+                654,
+                401,
+                668
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "A broader contribution of this work is an early instantiation of SSM-based relational reasoning for episodic few-shot classification. The SSM community has concentrated on singlesequence modeling tasks—language modeling, single-image classification, and medical image segmentation [23]—and recent SSM excursions into low-shot vision use the architecture as a backbone or feature enhancer [28]– [32], while the few-shot learning community has relied almost entirely on CNNs and Transformers. By showing that cross-image selective scanning is feasible and effective across multiple benchmarks and settings, we hope to invite contributions from both sides: SSM researchers can explore multi-sequence interaction mechanisms beyond single-image processing, while FSL researchers gain access to an architectural option with favorable scaling properties—global receptive fields at linear cost."
+                    }
+                ]
+            },
+            "bbox": [
+                55,
+                671,
+                486,
+                916
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "D. LIMITATIONS AND FUTURE WORK"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                512,
+                75,
+                786,
+                90
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Several limitations of the current work merit discussion. First, while SSM-Match excels on fine-grained datasets, its performance on general-object benchmarks (miniImageNet) trails ResNet-12-based state-of-the-art methods, suggesting that current SSM backbones would benefit from larger-scale pretraining or hybrid CNN–SSM designs that combine the inductive bias of convolutions with the long-range modeling of selective scans. Second, we have not systematically analyzed the impact of the state dimension "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "N _ { s }"
+                    },
+                    {
+                        "type": "text",
+                        "content": "on matching quality, which governs the information retention capacity across image boundaries; preliminary experiments suggest diminishing returns beyond "
+                    },
+                    {
+                        "type": "equation_inline",
+                        "content": "N _ { s } ~ = ~ 1 6"
+                    },
+                    {
+                        "type": "text",
+                        "content": ". Third, the current concatenationbased joint sequence construction assumes a fixed ordering of support samples, and alternative position-invariant aggregation strategies may improve robustness. Fourth, we evaluate only within the 5-way setting; extending to higherway scenarios would test the scalability of linear-complexity matching."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                90,
+                940,
+                367
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Several promising directions emerge from this work. The cross-image SSM matching module is, in principle, modalityagnostic: any task requiring comparison between a reference set and a query instance could benefit from selective scan-based relational reasoning. Extending SSM-Match to video few-shot action recognition is a natural next step, as Mamba’s native temporal modeling capacity aligns well with the sequential nature of video frames. Incorporating textbased semantic priors (e.g., CLIP embeddings) as additional support tokens in the cross-image scan could further enrich the relational representation, particularly for fine-grained categories where textual descriptions provide complementary information to visual features. Investigating whether the selective mechanism confers adversarial robustness would address an important practical concern for safety-critical fewshot applications. Finally, adapting Mamba-2’s SSD framework [22] as a drop-in replacement for the current Mamba scan could further improve training throughput and enable batch-level cross-image matching, which is particularly relevant for large-scale deployment scenarios."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                365,
+                940,
+                673
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "VI. CONCLUSION"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                510,
+                686,
+                647,
+                700
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "We presented SSM-Match, which recasts the selective scan of state space models as a cross-image matching operator for few-shot image classification. The module concatenates support and query tokens with a class-conditional prior token and per-image separators; bidirectional scanning yields supportconditioned query evidence and query-conditioned support summaries, fused by input-dependent gates into a contextdependent similarity score. The multi-scale matching pyramid further enriches the representation by capturing coarse and fine-grained discriminative cues at linear cost."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                702,
+                940,
+                855
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Experiments on miniImageNet, CUB-200-2011, and Stanford Cars—with equal-protocol backbone comparisons, factorized ablations, statistical testing, and measured efficiency—show that SSM-Match achieves strong performance on fine-grained classification under a frozen-backbone budget, reaching 84.72% at CUB-200 5-shot, and that crossimage selective scanning consistently improves over fixed cosine matching on identical features. Cross-domain evaluation on CIFAR-FS indicates that the selective mechanism provides a degree of robustness to domain shift, and the SSM variant comparison confirms that Mamba’s input-dependent selectivity is critical for few-shot discrimination."
+                    }
+                ]
+            },
+            "bbox": [
+                508,
+                855,
+                940,
+                932
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccesS\""
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                15,
+                220,
+                38
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "Author et al.: SSM-Match for Few-Shot Fine-Grained Image Classification"
+                    }
+                ]
+            },
+            "bbox": [
+                539,
+                35,
+                937,
+                49
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "10"
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                942,
+                78,
+                952
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14, 2026"
+                    }
+                ]
+            },
+            "bbox": [
+                847,
+                941,
+                937,
+                953
+            ]
+        }
+    ],
+    [
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": []
+            },
+            "bbox": [
+                55,
+                76,
+                484,
+                182
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "That SSM-Match achieves these results with a frozen backbone, linear O(KL) complexity, and a single consumer GPU speaks to its practical accessibility. Code, training configurations, and evaluation protocols are publicly available at https: //github.com/wx-rdc/ssm-match to support reproducibility. We believe this work opens a productive new direction at the intersection of efficient sequence modeling and data-efficient visual recognition, and we hope it inspires further exploration of state space models as a general-purpose tool for relational reasoning in machine learning."
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                182,
+                484,
+                336
+            ]
+        },
+        {
+            "type": "title",
+            "content": {
+                "title_content": [
+                    {
+                        "type": "text",
+                        "content": "REFERENCES"
+                    }
+                ],
+                "level": 2
+            },
+            "bbox": [
+                60,
+                351,
+                157,
+                364
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[1] C. Wah, S. Branson, P. Welinder, P. Perona, and S. Belongie, ‘‘The Caltech-UCSD Birds-200-2011 dataset,’’ California Institute of Technology, Pasadena, CA, USA, Tech. Rep. CNS-TR-2011-001, 2011."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                65,
+                368,
+                482,
+                402
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[2] J. Krause, M. Stark, J. Deng, and L. Fei-Fei, ‘‘3D object representations for fine-grained categorization,’’ in Proc. IEEE Int. Conf. Comput. Vis. Workshops (ICCVW), 2013, pp. 554–561."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                65,
+                402,
+                482,
+                436
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[3] K. He, X. Zhang, S. Ren, and J. Sun, ‘‘Deep residual learning for image recognition,’’ in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR), 2016, pp. 770–778."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                65,
+                437,
+                482,
+                471
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[4] A. Dosovitskiy et al., ‘‘An image is worth 16×16 words: Transformers for image recognition at scale,’’ in Proc. Int. Conf. Learn. Represent. (ICLR), 2021."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                65,
+                471,
+                482,
+                505
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[5] Y. Tian, Y. Wang, D. Krishnan, J. B. Tenenbaum, and P. Isola, ‘‘Rethinking few-shot image classification: A good embedding is all you need?,’’ in Proc. Eur. Conf. Comput. Vis. (ECCV), 2020, pp. 266–282."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                67,
+                506,
+                482,
+                540
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[6] A. Gu, K. Goel, and C. Ré, ‘‘Efficiently modeling long sequences with structured state spaces,’’ in Proc. Int. Conf. Learn. Represent. (ICLR), 2022."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                67,
+                540,
+                482,
+                563
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[7] A. Gu and T. Dao, ‘‘Mamba: Linear-time sequence modeling with selective state spaces,’’ arXiv preprint arXiv:2312.00752, 2023."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                67,
+                563,
+                482,
+                586
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[8] L. Zhu et al., ‘‘Vision Mamba: Efficient visual representation learning with bidirectional state space model,’’ in Proc. Int. Conf. Mach. Learn. (ICML), vol. 235, 2024, pp. 62429–62442."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                67,
+                586,
+                482,
+                620
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[9] Y. Liu et al., ‘‘VMamba: Visual state space model,’’ in Adv. Neural Inf. Process. Syst. (NeurIPS), vol. 37, 2024."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                65,
+                621,
+                482,
+                643
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[10] T. Huang, X. Pei, S. You, F. Wang, C. Qian, and C. Xu, ‘‘LocalMamba: Visual state space model with windowed selective scan,’’ in Proc. Eur. Conf. Comput. Vis. Workshops (ECCVW), 2024, pp. 12–22."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                644,
+                482,
+                677
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[11] S. Somvanshi et al., ‘‘Advancing intelligent sequence modeling: Evolution, trade-offs, and applications of state-space architectures from S4 to Mamba,’’ arXiv preprint arXiv:2503.18970, 2025."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                677,
+                482,
+                710
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[12] X. Liu, C. Zhang, and L. Zhang, ‘‘Vision Mamba: A comprehensive survey and taxonomy,’’ arXiv preprint arXiv:2405.04404, 2024."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                712,
+                482,
+                735
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[13] C. Finn, P. Abbeel, and S. Levine, ‘‘Model-agnostic meta-learning for fast adaptation of deep networks,’’ in Proc. Int. Conf. Mach. Learn. (ICML), vol. 70, 2017, pp. 1126–1135."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                735,
+                482,
+                769
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[14] O. Vinyals, C. Blundell, T. Lillicrap, K. Kavukcuoglu, and D. Wierstra, ‘‘Matching networks for one shot learning,’’ in Adv. Neural Inf. Process. Syst. (NeurIPS), vol. 29, 2016, pp. 3630–3638."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                769,
+                482,
+                804
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[15] J. Snell, K. Swersky, and R. Zemel, ‘‘Prototypical networks for few-shot learning,’’ in Adv. Neural Inf. Process. Syst. (NeurIPS), vol. 30, 2017, pp. 4077–4087."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                804,
+                482,
+                837
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[16] F. Sung, Y. Yang, L. Zhang, T. Xiang, P. H. S. Torr, and T. M. Hospedales, ‘‘Learning to compare: Relation network for few-shot learning,’’ in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR), 2018, pp. 1199– 1208."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                838,
+                482,
+                883
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[17] W. Li, L. Wang, J. Xu, J. Huo, Y. Gao, and J. Luo, ‘‘Revisiting local descriptor based image-to-class measure for few-shot learning,’’ in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR), 2019, pp. 7260– 7268."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                884,
+                482,
+                929
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[18] C. Zhang, Y. Cai, G. Lin, and C. Shen, ‘‘DeepEMD: Few-shot image classification with differentiable earth mover’s distance and structured classifiers,’’ in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR), 2020, pp. 12203–12213."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                78,
+                937,
+                124
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[19] D. Wertheimer, L. Tang, and B. Hariharan, ‘‘Few-shot classification with feature map reconstruction networks,’’ in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR), 2021, pp. 8012–8021."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                125,
+                937,
+                158
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[20] W.-Y. Chen, Y.-C. Liu, Z. Kira, Y.-C. F. Wang, and J.-B. Huang, ‘‘A closer look at few-shot classification,’’ in Proc. Int. Conf. Learn. Represent. (ICLR), 2019."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                158,
+                937,
+                191
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[21] A. Gu, A. Gupta, K. Goel, and C. Ré, ‘‘On the parameterization and initialization of diagonal state space models,’’ in Adv. Neural Inf. Process. Syst. (NeurIPS), vol. 35, 2022, pp. 2571–2584."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                193,
+                937,
+                227
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[22] T. Dao and A. Gu, ‘‘Transformers are SSMs: Generalized models and efficient algorithms through structured state space duality,’’ in Proc. Int. Conf. Mach. Learn. (ICML), vol. 235, 2024, pp. 10041–10071."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                228,
+                937,
+                260
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[23] Z. Xing, T. Ye, Y. Yang, G. Liu, and L. Zhu, ‘‘SegMamba: Long-range sequential modeling Mamba for 3D medical image segmentation,’’ in Proc. Int. Conf. Med. Image Comput. Comput.-Assisted Intervent. (MICCAI), 2024, pp. 578–588."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                262,
+                937,
+                306
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[24] L. Bertinetto, J. F. Henriques, P. H. S. Torr, and A. Vedaldi, ‘‘Metalearning with differentiable closed-form solvers,’’ in Proc. Int. Conf. Learn. Represent. (ICLR), 2019."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                308,
+                937,
+                342
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[25] Y. Guo, N. C. Codella, L. Karlinsky, J. V. Codella, J. R. Smith, K. Saenko, T. Rosing, and R. Feris, ‘‘A broader study of cross-domain few-shot learning,’’ in Proc. Eur. Conf. Comput. Vis. (ECCV), 2020, pp. 124–141."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                342,
+                937,
+                375
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[26] P. Jia, G. Gou, Y. Cheng, and A. Ning, ‘‘Bi-focus cosine complement network for few-shot fine-grained image classification,’’ Pattern Recognit. Lett., vol. 191, pp. 44–50, 2025, doi: 10.1016/j.patrec.2025.03.002."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                377,
+                937,
+                410
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[27] P. Jia, G. Gou, and Y. Cheng, ‘‘MAGNET: Multi-level feature guidance network for few-shot fine-grained image classification,’’ Signal Process., vol. 235, Art. no. 110031, 2025, doi: 10.1016/j.sigpro.2025.110031."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                410,
+                937,
+                445
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[28] D. Misra, I. Gala, and A. Orvieto, ‘‘On the low-shot transferability of [V]- Mamba,’’ arXiv preprint arXiv:2403.10696, 2024."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                445,
+                935,
+                468
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[29] H. Fang, S. Luo, X. Ma, J. Liu, and J. Chao, ‘‘Few-shot image classification method based on Vision Mamba and enhanced prototypes,’’ Microelectron. Comput., vol. 42, no. 6, pp. 75–85, 2025 (in Chinese), doi: 10.19304/J.ISSN1000-7180.2024.0402."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                468,
+                937,
+                512
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[30] A. Tong, J. Ren, Z. Meng, and L. Lu, ‘‘Mamba–wavelet multi-scale modeling method for few-shot fine-grained image classification,’’ J. Intell. Sci. Technol., 2026 (in Chinese)."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                514,
+                937,
+                548
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[31] S. Li, M. Yang, F. Wu, Y. Yu, M. Yang, X. Nie, and Y. Zhang, ‘‘Mamba-FSCIL: Dynamic adaptation with selective state space model for few-shot class-incremental learning,’’ arXiv preprint arXiv:2407.06136, 2024."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                548,
+                937,
+                581
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[32] S. Huang et al., ‘‘Manta: Enhancing Mamba for few-shot action recognition of long sub-sequence,’’ in Proc. AAAI Conf. Artif. Intell., 2025."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                581,
+                937,
+                604
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[33] H. Liu, W. Yan, M. Zaharia, and P. Abbeel, ‘‘Longhorn: State space models are amortized online learners,’’ arXiv preprint arXiv:2407.14207, 2024."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                604,
+                937,
+                627
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[34] T. Zhuo et al., ‘‘UINO-FSS: Unifying reinforcement learning and few-shot segmentation via Mamba-hypercorrelation,’’ arXiv preprint arXiv:2504.15669, 2025."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                627,
+                937,
+                662
+            ]
+        },
+        {
+            "type": "list",
+            "content": {
+                "list_type": "reference_list",
+                "list_items": [
+                    {
+                        "item_type": "text",
+                        "item_content": [
+                            {
+                                "type": "text",
+                                "content": "[35] J. Xin et al., ‘‘Few-shot object detection via spatial-channel state space model,’’ arXiv preprint arXiv:2507.15308, 2025."
+                            }
+                        ]
+                    }
+                ]
+            },
+            "bbox": [
+                513,
+                662,
+                937,
+                685
+            ]
+        },
+        {
+            "type": "image",
+            "content": {
+                "image_source": {
+                    "path": "images/a285e351b946d9a9e53b0ead75446235c8191ff02109ee82220fd40ba920921e.jpg"
+                },
+                "content": "",
+                "image_caption": [],
+                "image_footnote": [
+                    {
+                        "type": "text",
+                        "content": "HONGYU ZHU received the Ph.D. degree. He is currently an Associate Professor with the School of IoT Engineering, Wuxi Taihu University, Wuxi, China, and also with the Provincial Key (Construction) Laboratory of Intelligent Internet of Things Technology and Applications in Universities."
+                    }
+                ]
+            },
+            "bbox": [
+                515,
+                774,
+                638,
+                890
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "His research interests include machine learning, computer vision, few-shot learning, and intelligent IoT systems."
+                    }
+                ]
+            },
+            "bbox": [
+                652,
+                846,
+                937,
+                883
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccess"
+                    }
+                ]
+            },
+            "bbox": [
+                774,
+                15,
+                935,
+                38
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "Author et al.: SSM-Match for Few-Shot Fine-Grained Image Classification"
+                    }
+                ]
+            },
+            "bbox": [
+                57,
+                35,
+                454,
+                49
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14.2026"
+                    }
+                ]
+            },
+            "bbox": [
+                59,
+                942,
+                149,
+                952
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "11"
+                    }
+                ]
+            },
+            "bbox": [
+                920,
+                942,
+                937,
+                952
+            ]
+        }
+    ],
+    [
+        {
+            "type": "image",
+            "content": {
+                "image_source": {
+                    "path": "images/5f766401e0027b9772f08086422196486ba1ce935d654b1732871123859d8bb5.jpg"
+                },
+                "content": "",
+                "image_caption": [],
+                "image_footnote": []
+            },
+            "bbox": [
+                59,
+                94,
+                187,
+                182
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "GUI LIU received the Ph.D. degree. She is currently an Associate Research Fellow at the Jiangnan Institute of Computing Technology, Wuxi, China."
+                    }
+                ]
+            },
+            "bbox": [
+                199,
+                78,
+                484,
+                127
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Her research interests include high-performance computing, parallel algorithms, and intelligent computing systems."
+                    }
+                ]
+            },
+            "bbox": [
+                199,
+                127,
+                484,
+                164
+            ]
+        },
+        {
+            "type": "image",
+            "content": {
+                "image_source": {
+                    "path": "images/6ddad1a27c3c7c6e07fadea340b790e9885af064007a7d8dccb31a47e34b0b37.jpg"
+                },
+                "content": "",
+                "image_caption": [],
+                "image_footnote": []
+            },
+            "bbox": [
+                69,
+                514,
+                178,
+                629
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "RONG LI received the M.S. degree. She is currently an Associate Professor with the School of IoT Engineering, Wuxi Taihu University, Wuxi, China."
+                    }
+                ]
+            },
+            "bbox": [
+                199,
+                512,
+                484,
+                562
+            ]
+        },
+        {
+            "type": "paragraph",
+            "content": {
+                "paragraph_content": [
+                    {
+                        "type": "text",
+                        "content": "Her research interests include machine learning, pattern recognition, and image processing."
+                    }
+                ]
+            },
+            "bbox": [
+                199,
+                562,
+                482,
+                588
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "IEEEAccesS\""
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                15,
+                220,
+                38
+            ]
+        },
+        {
+            "type": "page_header",
+            "content": {
+                "page_header_content": [
+                    {
+                        "type": "text",
+                        "content": "Author et al.: SSM-Match for Few-Shot Fine-Grained Image Classification"
+                    }
+                ]
+            },
+            "bbox": [
+                541,
+                35,
+                937,
+                48
+            ]
+        },
+        {
+            "type": "page_number",
+            "content": {
+                "page_number_content": [
+                    {
+                        "type": "text",
+                        "content": "12"
+                    }
+                ]
+            },
+            "bbox": [
+                60,
+                942,
+                78,
+                952
+            ]
+        },
+        {
+            "type": "page_footer",
+            "content": {
+                "page_footer_content": [
+                    {
+                        "type": "text",
+                        "content": "VOLUME 14, 2026"
+                    }
+                ]
+            },
+            "bbox": [
+                847,
+                942,
+                937,
+                953
+            ]
+        }
+    ]
+]

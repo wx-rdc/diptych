@@ -1,0 +1,336 @@
+{
+    "pdf_info": [
+        {
+            "preproc_blocks": [
+                {
+                    "bbox": [
+                        56,
+                        59,
+                        537,
+                        90
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                60,
+                                535,
+                                72
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        60,
+                                        535,
+                                        72
+                                    ],
+                                    "type": "text",
+                                    "content": "Table one summarizes the quantitative comparison between the baseline method and",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                76,
+                                280,
+                                88
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        76,
+                                        280,
+                                        88
+                                    ],
+                                    "type": "text",
+                                    "content": "our proposed approach on the test split.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "type": "table",
+                    "bbox": [
+                        132,
+                        102,
+                        479,
+                        156
+                    ],
+                    "blocks": [
+                        {
+                            "bbox": [
+                                132,
+                                102,
+                                479,
+                                156
+                            ],
+                            "type": "table_body",
+                            "angle": 0,
+                            "lines": [
+                                {
+                                    "bbox": [
+                                        132,
+                                        102,
+                                        479,
+                                        156
+                                    ],
+                                    "spans": [
+                                        {
+                                            "bbox": [
+                                                132,
+                                                102,
+                                                479,
+                                                156
+                                            ],
+                                            "type": "table",
+                                            "html": "<table><tr><td>Method</td><td>Accuracy</td><td>F1</td></tr><tr><td>Baseline</td><td>78.4</td><td>77.1</td></tr><tr><td>Ours</td><td>84.2</td><td>83.6</td></tr></table>",
+                                            "image_path": "5e2e735e63d098d04f386ae42b52467f2871ac5b25a2101aac90bb752d74e9ed.jpg"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "index": 1
+                        }
+                    ],
+                    "index": 1
+                },
+                {
+                    "bbox": [
+                        56,
+                        158,
+                        551,
+                        187
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                159,
+                                549,
+                                171
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        159,
+                                        549,
+                                        171
+                                    ],
+                                    "type": "text",
+                                    "content": "Numbers in the TABLEMARKER table are averaged over three runs with different random",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                173,
+                                224,
+                                186
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        173,
+                                        224,
+                                        186
+                                    ],
+                                    "type": "text",
+                                    "content": "seeds for statistical reliability.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ],
+            "discarded_blocks": [],
+            "page_size": [
+                612,
+                792
+            ],
+            "page_idx": 0,
+            "para_blocks": [
+                {
+                    "bbox": [
+                        56,
+                        59,
+                        537,
+                        90
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 0,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                60,
+                                535,
+                                72
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        60,
+                                        535,
+                                        72
+                                    ],
+                                    "type": "text",
+                                    "content": "Table one summarizes the quantitative comparison between the baseline method and",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                59,
+                                76,
+                                280,
+                                88
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        59,
+                                        76,
+                                        280,
+                                        88
+                                    ],
+                                    "type": "text",
+                                    "content": "our proposed approach on the test split.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                },
+                {
+                    "type": "table",
+                    "bbox": [
+                        132,
+                        102,
+                        479,
+                        156
+                    ],
+                    "blocks": [
+                        {
+                            "bbox": [
+                                132,
+                                102,
+                                479,
+                                156
+                            ],
+                            "type": "table_body",
+                            "angle": 0,
+                            "lines": [
+                                {
+                                    "bbox": [
+                                        132,
+                                        102,
+                                        479,
+                                        156
+                                    ],
+                                    "spans": [
+                                        {
+                                            "bbox": [
+                                                132,
+                                                102,
+                                                479,
+                                                156
+                                            ],
+                                            "type": "table",
+                                            "html": "<table><tr><td>Method</td><td>Accuracy</td><td>F1</td></tr><tr><td>Baseline</td><td>78.4</td><td>77.1</td></tr><tr><td>Ours</td><td>84.2</td><td>83.6</td></tr></table>",
+                                            "image_path": "5e2e735e63d098d04f386ae42b52467f2871ac5b25a2101aac90bb752d74e9ed.jpg"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "index": 1
+                        }
+                    ],
+                    "index": 1
+                },
+                {
+                    "bbox": [
+                        56,
+                        158,
+                        551,
+                        187
+                    ],
+                    "type": "text",
+                    "angle": 0,
+                    "index": 2,
+                    "lines": [
+                        {
+                            "bbox": [
+                                58,
+                                159,
+                                549,
+                                171
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        159,
+                                        549,
+                                        171
+                                    ],
+                                    "type": "text",
+                                    "content": "Numbers in the TABLEMARKER table are averaged over three runs with different random",
+                                    "score": 1.0
+                                }
+                            ]
+                        },
+                        {
+                            "bbox": [
+                                58,
+                                173,
+                                224,
+                                186
+                            ],
+                            "spans": [
+                                {
+                                    "bbox": [
+                                        58,
+                                        173,
+                                        224,
+                                        186
+                                    ],
+                                    "type": "text",
+                                    "content": "seeds for statistical reliability.",
+                                    "score": 1.0
+                                }
+                            ]
+                        }
+                    ],
+                    "merge_prev": false
+                }
+            ]
+        }
+    ],
+    "_backend": "hybrid",
+    "_effort": "medium",
+    "_ocr_enable": false,
+    "_version_name": "3.4.4"
+}
