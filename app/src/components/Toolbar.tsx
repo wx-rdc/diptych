@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import type { ParseProgress, RenderMode } from '../types';
+import QuotaIndicator from './QuotaIndicator';
 
 interface Props {
   filePath: string;
@@ -232,6 +233,7 @@ export default function Toolbar({
           <span className="hidden text-xs text-slate-400 lg:inline" data-testid="anon-hint">
             游客模式 · 额度内免登录
           </span>
+          <QuotaIndicator />
           <button
             onClick={onLoginClick}
             className="rounded border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"

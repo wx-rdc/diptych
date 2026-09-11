@@ -1674,6 +1674,7 @@ pub async fn run() {
         Err(_) => format!("127.0.0.1:{port}"),
     };
     let state = AppState::from_env();
+    spawn_anon_ttl_cron(state.clone());
     let app = build_app(state);
 
     let listener = tokio::net::TcpListener::bind(&addr)
@@ -1681,4 +1682,41 @@ pub async fn run() {
         .unwrap_or_else(|e| panic!("监听 {addr} 失败: {e}"));
     eprintln!("geminus-server listening on http://{addr}");
     axum::serve(listener, app).await.expect("服务器错误");
+}
+
+/// v2.4 T6.4：匿名文档 TTL 清理（单次执行，cron 与测试共用）。
+/// doc_access 中过期（24h）的匿名文档 → 清内存 IR / 原始文件路径 / uploads 落盘 /
+/// MinerU raw 缓存目录 / 译文留存。段落翻译缓存按内容哈希全局共享，不随文档清理。
+pub fn purge_anonymous_docs(state: &AppState, ttl_secs: i64) -> usize {
+    let expired = state.doc_access.purge_expired(ttl_secs);
+    for doc_id in &expired {
+        let path = state.original_pdfs.lock().unwrap().remove(doc_id);
+        state.docs.lock().unwrap().remove(doc_id);
+        state.translations.lock().unwrap().remove(doc_id);
+        state.file_hashes.lock().unwrap().remove(doc_id);
+        if let Some(path) = path {
+            if let Ok(hash) = TranslationCache::file_sha256(&path) {
+                let raw_dir = state.mineru_cache_root.join(&hash);
+                if raw_dir.exists() {
+                    let _ = std::fs::remove_dir_all(&raw_dir);
+                }
+            }
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    expired.len()
+}
+
+/// v2.4 T6.4：每小时跑一次匿名文档 TTL 清理
+fn spawn_anon_ttl_cron(state: AppState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(3600));
+        loop {
+            interval.tick().await;
+            let n = purge_anonymous_docs(&state, access::ANON_TOKEN_TTL_SECS);
+            if n > 0 {
+                eprintln!("[ttl] 匿名文档过期清理：{n} 个（IR/原文/raw 缓存）");
+            }
+        }
+    });
 }

@@ -356,3 +356,39 @@ async fn spawn_mock_llm() -> String {
     tokio::spawn(async move { axum::serve(listener, router).await.unwrap(); });
     format!("http://{addr}")
 }
+
+/// T6.4：匿名文档 TTL 清理——过期后内存 IR 移除、token 失效、登录文档不受影响
+#[tokio::test]
+async fn anon_ttl_purge_clears_doc_state() {
+    let cache = Arc::new(TranslationCache::open_in_memory().unwrap());
+    let state = AppState::new(cache, ApiConfig::new("http://unused", "k", "m"), 3);
+    let app = build_app(state.clone());
+    let (status, v) = upload_pdf(&app, "198.51.100.77", "simple.pdf").await;
+    assert_eq!(status, 200);
+    let doc_id = v["id"].as_str().unwrap().to_string();
+    let token = v["access_token"].as_str().unwrap().to_string();
+    assert_eq!(get_document(&app, &doc_id, &[("x-real-ip", "198.51.100.77")]).await, 200);
+
+    // ttl=-1：所有已登记文档视为过期（created_at < now+1，规避同秒边界）
+    let n = geminus_server::purge_anonymous_docs(&state, -1);
+    assert_eq!(n, 1, "清理 1 个过期匿名文档");
+    assert_eq!(
+        get_document(&app, &doc_id, &[("x-real-ip", "198.51.100.77")]).await,
+        403,
+        "清理后访问凭证已删 → 防盗链拦截（403；不泄露文档存在性）"
+    );
+    // token 同步失效
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri(format!("/api/documents/{doc_id}?token={token}"))
+                .header("x-real-ip", "198.51.100.77")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 403, "token 记录已删 → 防盗链拦截");
+}
