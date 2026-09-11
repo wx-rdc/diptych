@@ -4,8 +4,8 @@ import type { ParseProgress, RenderMode } from '../types';
 interface Props {
   filePath: string;
   onFilePathChange: (v: string) => void;
-  onParse: () => void;
-  parsing: boolean;
+  /** v2.4 T3：本地路径开发分支（Enter 触发零点击流水线；上传入口已自动化） */
+  onParseLocal: () => void;
   /** v2：MinerU 解析进度（SSE），null 无任务 */
   parseProgress: ParseProgress | null;
   /** v2：渲染模式切换（仅 PDF + pdf_meta 时显示） */
@@ -17,16 +17,11 @@ interface Props {
   targetLang: string;
   onSourceLangChange: (v: string) => void;
   onTargetLangChange: (v: string) => void;
-  onTranslate: () => void;
-  translating: boolean;
-  canTranslate: boolean;
   /** v2.1：阅读字号档（A-/A+ 控件） */
   fontSize: number;
   onFontIncrease: () => void;
   onFontDecrease: () => void;
-  /** v2.1：翻译按钮状态机（文案/重试语义） */
-  buttonState: TranslateButtonState;
-  /** 部署安全加固：文件选择上传（公网用户入口） */
+  /** 部署安全加固：文件选择上传（公网用户入口；v2.4 零点击自动流水线起点） */
   onPickFile: (file: File) => void;
   /** 部署安全加固：当前登录用户（null = 未登录） */
   username: string | null;
@@ -34,26 +29,6 @@ interface Props {
   onLogoutClick: () => void;
   /** v2.4：打开「我的文档」历史面板（仅登录态传入） */
   onHistoryClick?: () => void;
-}
-
-/** 翻译按钮状态机（v2.1 T7.1） */
-export type TranslateButtonState =
-  | { kind: 'idle' }
-  | { kind: 'translating'; current: number; total: number }
-  | { kind: 'done'; errors: number }
-  | { kind: 'error' };
-
-export function translateButtonLabel(s: TranslateButtonState): string {
-  switch (s.kind) {
-    case 'idle':
-      return '翻译';
-    case 'translating':
-      return `翻译中 ${s.current}/${s.total}…`;
-    case 'done':
-      return s.errors > 0 ? `完成（${s.errors} 段未翻译）· 重译` : '已完成 ✓ 重新翻译';
-    case 'error':
-      return '翻译出错 · 重试';
-  }
 }
 
 /** MinerU 解析进度文案 */
@@ -84,12 +59,14 @@ const LANGS = [
   { code: 'de', label: '德语' },
 ];
 
-/** 工具栏：打开文件、语言选择、翻译按钮（plan.md 组件树） */
+/**
+ * 工具栏（v2.4 T3 零点击后）：文件选择即自动「解析 → 翻译」，
+ * 「打开 / 开始翻译」按钮已移除；本地路径输入保留为开发分支（Enter 触发）。
+ */
 export default function Toolbar({
   filePath,
   onFilePathChange,
-  onParse,
-  parsing,
+  onParseLocal,
   parseProgress,
   renderMode,
   onRenderModeChange,
@@ -99,13 +76,9 @@ export default function Toolbar({
   targetLang,
   onSourceLangChange,
   onTargetLangChange,
-  onTranslate,
-  translating,
-  canTranslate,
   fontSize,
   onFontIncrease,
   onFontDecrease,
-  buttonState,
   onPickFile,
   username,
   onLoginClick,
@@ -133,9 +106,8 @@ export default function Toolbar({
       />
       <button
         onClick={() => fileInputRef.current?.click()}
-        disabled={parsing}
-        className="rounded border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-        title="选择 .docx / .pdf 文件上传"
+        className="rounded bg-slate-800 px-3 py-1 text-sm font-medium text-white hover:bg-slate-700"
+        title="选择 .docx / .pdf 文件，自动解析并翻译"
         data-testid="upload-btn"
       >
         📁 选择文件
@@ -145,19 +117,13 @@ export default function Toolbar({
         type="text"
         value={filePath}
         onChange={(e) => onFilePathChange(e.target.value)}
-        placeholder="上传文件，或输入服务器本地 .docx / .pdf 路径（开发）"
-        className="min-w-[16rem] flex-1 rounded border border-slate-300 px-2 py-1 text-sm focus:border-blue-400 focus:outline-none"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && filePath.trim()) onParseLocal();
+        }}
+        placeholder="上传文件，或输入服务器本地 .docx / .pdf 路径后回车（开发）"
+        className="hidden min-w-[16rem] flex-1 rounded border border-slate-300 px-2 py-1 text-sm focus:border-blue-400 focus:outline-none md:block"
         data-testid="file-path-input"
       />
-      <button
-        onClick={onParse}
-        disabled={parsing || !filePath.trim()}
-        className="rounded bg-slate-800 px-3 py-1 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-        data-testid="open-btn"
-      >
-        {parsing ? '解析中…' : '打开'}
-      </button>
-
       <div
         className="flex items-center overflow-hidden rounded border border-slate-300 text-xs"
         data-testid="font-size-control"
@@ -200,22 +166,6 @@ export default function Toolbar({
           ))}
         </select>
       </div>
-
-      <button
-        onClick={onTranslate}
-        disabled={!canTranslate || translating}
-        className={
-          'rounded px-3 py-1 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40 ' +
-          (buttonState.kind === 'error'
-            ? 'bg-red-600 hover:bg-red-500'
-            : buttonState.kind === 'done'
-              ? 'bg-emerald-600 hover:bg-emerald-500'
-              : 'bg-blue-600 hover:bg-blue-500')
-        }
-        data-testid="translate-btn"
-      >
-        {translateButtonLabel(buttonState)}
-      </button>
 
       {canToggleRenderMode ? (
         <div className="flex overflow-hidden rounded border border-slate-300 text-xs" data-testid="render-mode-toggle">
@@ -280,7 +230,7 @@ export default function Toolbar({
       ) : (
         <div className="flex items-center gap-1" data-testid="auth-area">
           <span className="hidden text-xs text-slate-400 lg:inline" data-testid="anon-hint">
-            未登录 · 限 5 页
+            游客模式 · 额度内免登录
           </span>
           <button
             onClick={onLoginClick}

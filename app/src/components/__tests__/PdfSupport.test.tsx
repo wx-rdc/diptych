@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../../App';
 import DocumentViewer from '../DocumentViewer';
-import { parseDoc } from '../../services/backend';
+import { parseDoc, translateDoc } from '../../services/backend';
 import type { GDocument } from '../../types';
 
 vi.mock('../../services/backend', async (importOriginal) => {
@@ -31,6 +31,9 @@ const pdfDoc: GDocument = {
 
 beforeEach(() => {
   vi.mocked(parseDoc).mockReset();
+  // v2.4 零点击：解析成功会自动翻译——挂起不影响渲染断言
+  vi.mocked(translateDoc).mockReset();
+  vi.mocked(translateDoc).mockImplementation(() => new Promise(() => {}));
 });
 
 afterEach(cleanup);
@@ -70,8 +73,9 @@ describe('App PDF 流程（T10.1/T10.3）', () => {
   it('打开 .pdf 路径 → PDF 徽章 + 内容渲染', async () => {
     vi.mocked(parseDoc).mockResolvedValue(pdfDoc);
     render(<App />);
-    fireEvent.change(screen.getByTestId('file-path-input'), { target: { value: '/home/u/papers/two_column.pdf' } });
-    fireEvent.click(screen.getByTestId('open-btn'));
+    const input = screen.getByTestId('file-path-input');
+    fireEvent.change(input, { target: { value: '/home/u/papers/two_column.pdf' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(screen.getAllByText('A Two Column Study').length).toBe(2));
     expect(screen.getByTestId('file-type-badge')).toHaveTextContent('PDF');
     expect(parseDoc).toHaveBeenCalledWith('/home/u/papers/two_column.pdf', 'auto', expect.any(Function));
@@ -80,8 +84,9 @@ describe('App PDF 流程（T10.1/T10.3）', () => {
   it('打开 .docx 路径 → DOCX 徽章（回归）', async () => {
     vi.mocked(parseDoc).mockResolvedValue(pdfDoc);
     render(<App />);
-    fireEvent.change(screen.getByTestId('file-path-input'), { target: { value: '/tmp/rich.docx' } });
-    fireEvent.click(screen.getByTestId('open-btn'));
+    const input = screen.getByTestId('file-path-input');
+    fireEvent.change(input, { target: { value: '/tmp/rich.docx' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(screen.getByTestId('file-type-badge')).toHaveTextContent('DOCX'));
   });
 
@@ -93,8 +98,9 @@ describe('App PDF 流程（T10.1/T10.3）', () => {
   it('解析失败 → 错误仍正常展示（加密/损坏 PDF 的 422 文案）', async () => {
     vi.mocked(parseDoc).mockRejectedValue(new Error('加密 PDF 暂不支持，请先解密后重试'));
     render(<App />);
-    fireEvent.change(screen.getByTestId('file-path-input'), { target: { value: '/x/enc.pdf' } });
-    fireEvent.click(screen.getByTestId('open-btn'));
+    const input = screen.getByTestId('file-path-input');
+    fireEvent.change(input, { target: { value: '/x/enc.pdf' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => {
       expect(screen.getByTestId('empty-error')).toHaveTextContent('加密 PDF 暂不支持');
     });

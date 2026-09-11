@@ -1323,6 +1323,25 @@ async fn translate_handler(
     Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
 }
 
+/// v2.4 T3/T6：当前访问者配额状态（匿名按 IP；登录与本地直连不限量）
+async fn quota_status_handler(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let unlimited = json!({ "anonymous": false, "unlimited": true, "remaining": null });
+    match current_user(&state, &headers) {
+        Some(_) => Json(unlimited).into_response(),
+        None => match client_ip(&headers) {
+            Some(ip) => Json(json!({
+                "anonymous": true,
+                "unlimited": false,
+                "limit": state.quota.limit(),
+                "used": state.quota.used_pages(&ip),
+                "remaining": state.quota.remaining(&ip),
+            }))
+            .into_response(),
+            None => Json(unlimited).into_response(),
+        },
+    }
+}
+
 /// v2.4 T5：取消进行中的翻译任务（三选一校验同查看；?token= 供匿名持有者）
 async fn translate_cancel_handler(
     State(state): State<AppState>,
@@ -1634,6 +1653,7 @@ pub fn build_app(state: AppState) -> Router {
         .route("/api/translate/paragraph", post(translate_paragraph_handler))
         .route("/api/documents/:doc_id", get(get_document_handler))
         .route("/api/history", get(history_handler))
+        .route("/api/quota", get(quota_status_handler))
         .route("/api/resource/:doc_id/:rid", get(resource_handler))
         .route("/api/original/:doc_id", get(original_pdf_handler))
         .route("/api/config/mineru", get(mineru_config_get_handler).post(mineru_config_post_handler))
