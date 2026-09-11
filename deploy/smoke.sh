@@ -121,9 +121,13 @@ if ! curl -s "$BASE/api/auth/me" | grep -q '"require_login":true'; then
   # 6.6.3 token 放行（换 IP）
   CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Real-IP: 203.0.113.1" "$BASE/api/documents/$ANON_DOC?token=$ANON_TOK")
   check "跨 IP 带 token GET → 200" 200 "$CODE"
-  # 6.6.4 盗链拦截
+  # 6.6.4 盗链拦截（直连可模拟跨 IP → 403；公网 nginx 覆盖式注入 X-Real-IP，
+  #      伪造头无效且实为同 IP → uploader_ip 匹配放行是正确行为）
   CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Real-IP: 203.0.113.1" "$BASE/api/documents/$ANON_DOC")
-  check "跨 IP 无 token → 403（防盗链）" 403 "$CODE"
+  case "$BASE" in
+    *127.0.0.1*|*localhost*) check "跨 IP 无 token → 403（防盗链）" 403 "$CODE" ;;
+    *) check "公网同 IP 无 token → 200（nginx 覆盖伪造头 + uploader_ip 匹配）" 200 "$CODE" ;;
+  esac
   # 6.6.5 cancel 幂等（无任务 → 404）
   CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/translate/$ANON_DOC/cancel")
   check "cancel 无任务 → 404（幂等）" 404 "$CODE"
