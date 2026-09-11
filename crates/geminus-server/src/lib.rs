@@ -347,9 +347,7 @@ fn doc_access_guard(
         return None;
     }
     // ③ 上传者 IP 匹配；直连本机（None）放行
-    let Some(ip) = client_ip(headers) else {
-        return None;
-    };
+    let ip = client_ip(headers)?;
     if state.doc_access.uploader_ip(doc_id).as_deref() == Some(ip.as_str()) {
         return None;
     }
