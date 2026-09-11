@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
 import { BackendError, parseDoc, translateDoc } from '../services/backend';
 import { fetchMe } from '../services/auth';
@@ -12,6 +12,7 @@ vi.mock('../services/backend', async (importOriginal) => {
     ...actual,
     parseDoc: vi.fn(),
     translateDoc: vi.fn(),
+    fetchQuota: vi.fn().mockResolvedValue({ anonymous: false, unlimited: true, remaining: null }),
   };
 });
 
@@ -48,35 +49,42 @@ const translated: TranslatedDocument = {
   ],
 };
 
+/** 挂起的翻译（默认：自动翻译不产生结果，原文渲染断言不受干扰） */
+const pendingTranslate = () => new Promise<TranslatedDocument>(() => {});
+
 beforeEach(() => {
   vi.mocked(parseDoc).mockReset();
   vi.mocked(translateDoc).mockReset();
+  vi.mocked(translateDoc).mockImplementation(pendingTranslate);
   vi.mocked(fetchMe).mockResolvedValue({ authenticated: false, username: null });
 });
 
 afterEach(cleanup);
 
-async function openDoc() {
+/**
+ * v2.4 T3 零点击：输入本地路径 + Enter → 自动解析（+自动翻译挂起）。
+ * 「打开」按钮已移除——Enter 是本地路径开发分支的流水线触发方式。
+ */
+async function openDoc(path = '/tmp/test.docx') {
   render(<App />);
-  fireEvent.change(screen.getByTestId('file-path-input'), { target: { value: '/tmp/test.docx' } });
-  fireEvent.click(screen.getByTestId('open-btn'));
+  const input = screen.getByTestId('file-path-input');
+  fireEvent.change(input, { target: { value: path } });
+  fireEvent.keyDown(input, { key: 'Enter' });
   // 双栏各渲染一次原文
   await waitFor(() => expect(screen.getAllByText('Introduction').length).toBe(2));
 }
 
-describe('App 集成（mock backend）', () => {
-  it('打开文档 → 双栏渲染原文与占位符', async () => {
+describe('App 集成（mock backend，零点击流水线）', () => {
+  it('Enter 打开文档 → 双栏渲染原文与占位符（自动解析）', async () => {
     vi.mocked(parseDoc).mockResolvedValue(doc);
     await openDoc();
 
-    // 双栏：原文 + 译文（未翻译时译文侧也显示原文）
     expect(screen.getAllByText('Introduction').length).toBe(2);
-    // 图片占位符在两侧各出现一次
     expect(screen.getAllByAltText('fig').length).toBe(2);
     expect(parseDoc).toHaveBeenCalledWith('/tmp/test.docx', 'auto', expect.any(Function));
   });
 
-  it('翻译 → 进度更新 + 译文替换 + 占位符保留', async () => {
+  it('零点击自动翻译：解析完成 → 译文替换 + 占位符保留 + 进度计数', async () => {
     vi.mocked(parseDoc).mockResolvedValue(doc);
     vi.mocked(translateDoc).mockImplementation(
       async (_id: string, _src: string, _tgt: string, onProgress: (p: TranslateProgress) => void) => {
@@ -85,28 +93,29 @@ describe('App 集成（mock backend）', () => {
         return translated;
       },
     );
-    await openDoc();
+    render(<App />);
+    const input = screen.getByTestId('file-path-input');
+    fireEvent.change(input, { target: { value: '/tmp/test.docx' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
 
-    fireEvent.click(screen.getByTestId('translate-btn'));
-
+    // 无任何额外点击，译文自动出现
     await waitFor(() => {
       expect(screen.getByText('机器学习很有趣。')).toBeInTheDocument();
     });
-    // 翻译后译文侧不再是英文原文（原文侧仍有一处）
     expect(screen.getAllByText('Machine learning is fun.').length).toBe(1);
-    // 占位符图片仍在两栏
     expect(screen.getAllByAltText('fig').length).toBe(2);
-    // 状态栏计数与进度
     expect(screen.getByText('✅ 完成 1')).toBeInTheDocument();
     expect(screen.getByText('💾 缓存命中 1')).toBeInTheDocument();
     expect(screen.getByTestId('progress-text')).toHaveTextContent('100%');
+    expect(translateDoc).toHaveBeenCalledWith('d1', 'en', 'zh', expect.any(Function));
   });
 
   it('解析失败 → 错误提示', async () => {
     vi.mocked(parseDoc).mockRejectedValue(new Error('文件不存在'));
     render(<App />);
-    fireEvent.change(screen.getByTestId('file-path-input'), { target: { value: '/nope.docx' } });
-    fireEvent.click(screen.getByTestId('open-btn'));
+    const input = screen.getByTestId('file-path-input');
+    fireEvent.change(input, { target: { value: '/nope.docx' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => {
       expect(screen.getByTestId('empty-error')).toHaveTextContent('文件不存在');
     });
@@ -115,8 +124,9 @@ describe('App 集成（mock backend）', () => {
   it('点击段落 → 两侧同 id 块高亮', async () => {
     vi.mocked(parseDoc).mockResolvedValue(doc);
     const { container } = render(<App />);
-    fireEvent.change(screen.getByTestId('file-path-input'), { target: { value: '/tmp/t.docx' } });
-    fireEvent.click(screen.getByTestId('open-btn'));
+    const input = screen.getByTestId('file-path-input');
+    fireEvent.change(input, { target: { value: '/tmp/t.docx' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(screen.getAllByText('Introduction').length).toBe(2));
 
     const blocks = container.querySelectorAll('[data-block-id="b2"]');
@@ -124,17 +134,16 @@ describe('App 集成（mock backend）', () => {
     fireEvent.click(blocks[0]);
     await waitFor(() => {
       const ringed = container.querySelectorAll('[data-active="true"]');
-      expect(ringed.length).toBe(2); // 两侧对应块同时高亮（v2.1 T6：border-l-4 + data-active）
+      expect(ringed.length).toBe(2); // 两侧对应块同时高亮（v2.1 T6）
     });
   });
 
   // ── 部署安全加固 ──
 
   it('匿名状态 → 工具栏显示登录按钮；点击打开登录对话框', async () => {
-    vi.mocked(parseDoc).mockResolvedValue(doc);
     render(<App />);
     expect(screen.getByTestId('login-btn')).toBeInTheDocument();
-    expect(screen.getByTestId('anon-hint')).toHaveTextContent('限 5 页');
+    expect(screen.getByTestId('anon-hint')).toHaveTextContent('游客模式');
     fireEvent.click(screen.getByTestId('login-btn'));
     await waitFor(() => expect(screen.getByTestId('login-dialog')).toBeInTheDocument());
   });
@@ -145,87 +154,70 @@ describe('App 集成（mock backend）', () => {
     await waitFor(() => expect(screen.getByTestId('auth-username')).toHaveTextContent('alice'));
     expect(screen.getByTestId('logout-btn')).toBeInTheDocument();
   });
-
-  it('解析遇 429（未登录额度用尽）→ 弹出登录对话框并展示限流文案', async () => {
-    vi.mocked(parseDoc).mockRejectedValue(
-      new BackendError('未登录用户最多查看并翻译 5 页（当前已用 5 页）。请登录后继续使用。', 429),
-    );
-    render(<App />);
-    fireEvent.change(screen.getByTestId('file-path-input'), { target: { value: '/tmp/big.pdf' } });
-    fireEvent.click(screen.getByTestId('open-btn'));
-    await waitFor(() => expect(screen.getByTestId('login-dialog')).toBeInTheDocument());
-    expect(screen.getByTestId('login-hint')).toHaveTextContent('未登录用户最多查看并翻译 5 页');
-    expect(screen.getByTestId('empty-error')).toHaveTextContent('请登录后继续使用');
-  });
 });
 
-// ── v2.4：权限拦截（require_login=1 时未登录拦截打开/翻译，登录后自动续跑） ──
+// ── v2.4：402/401 软性引导（替代旧 require_login 前端拦截） ──
 
-describe('v2.4 权限拦截（require_login=1）', () => {
-  beforeEach(() => {
-    vi.mocked(fetchMe).mockResolvedValue({
-      authenticated: false, username: null, login_enabled: true, require_login: true,
-    });
-  });
-
-  it('未登录点「打开」→ 弹登录框且不发起解析请求；登录成功后自动续跑', async () => {
-    vi.mocked(parseDoc).mockResolvedValue(doc);
-    render(<App />);
-    // 等 /api/auth/me 生效（requireLogin 状态就绪）再操作
-    await waitFor(() => expect(vi.mocked(fetchMe)).toHaveBeenCalled());
-    await act(async () => {});
-    fireEvent.change(screen.getByTestId('file-path-input'), { target: { value: '/tmp/test.docx' } });
-    fireEvent.click(screen.getByTestId('open-btn'));
-
-    // 登录框弹出，未发解析请求
-    expect(await screen.findByTestId('login-overlay')).toBeInTheDocument();
-    expect(parseDoc).not.toHaveBeenCalled();
-
-    // 登录成功 → 自动继续打开
-    fireEvent.change(screen.getByTestId('login-username'), { target: { value: 'alice' } });
-    fireEvent.change(screen.getByTestId('login-password'), { target: { value: 'pw' } });
-    fireEvent.click(screen.getByTestId('login-submit'));
-    await waitFor(() =>
-      expect(parseDoc).toHaveBeenCalledWith('/tmp/test.docx', 'auto', expect.any(Function)),
+describe('v2.4 配额与权限引导', () => {
+  it('解析遇 402（额度不足）→ QuotaExceededCard 引导登录（非弹框拦截）', async () => {
+    vi.mocked(parseDoc).mockRejectedValue(
+      new BackendError('游客最多可翻译 5 页（剩余 0 页，本文件需 10 页）', 402, {
+        limit: 5,
+        used: 5,
+        required: 10,
+      }),
     );
-    await waitFor(() => expect(screen.getAllByText('Introduction').length).toBe(2));
+    render(<App />);
+    const input = screen.getByTestId('file-path-input');
+    fireEvent.change(input, { target: { value: '/tmp/big.pdf' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByTestId('quota-exceeded-card')).toBeInTheDocument());
+    expect(screen.getByText(/游客最多可翻译 5 页/)).toBeInTheDocument();
+    expect(screen.getByTestId('quota-login-btn')).toBeInTheDocument();
   });
 
-  it('未登录点「翻译」→ 同样拦截弹登录框', async () => {
-    vi.mocked(parseDoc).mockResolvedValue(doc);
-    vi.mocked(fetchMe).mockResolvedValueOnce({
-      // 先以 require_login=0 打开文档，再切换为 1 触发翻译拦截
-      authenticated: false, username: null, login_enabled: true, require_login: false,
-    });
+  it('解析遇 401/403（需登录/无权访问）→ 弹出登录对话框并展示文案', async () => {
+    vi.mocked(parseDoc).mockRejectedValue(
+      new BackendError('请登录后查看与翻译文档', 401),
+    );
     render(<App />);
-    fireEvent.change(screen.getByTestId('file-path-input'), { target: { value: '/tmp/test.docx' } });
-    fireEvent.click(screen.getByTestId('open-btn'));
-    await waitFor(() => expect(screen.getAllByText('Introduction').length).toBe(2));
-
-    // 切到 require_login=1（App 已加载，requireLogin 状态仍为 false → 直接拦截模拟：
-    // 重新挂载后 require_login=1）
-    cleanup();
-    vi.mocked(fetchMe).mockResolvedValue({
-      authenticated: false, username: null, login_enabled: true, require_login: true,
-    });
-    render(<App />);
-    await waitFor(() => expect(screen.getByTestId('login-btn')).toBeInTheDocument());
-    // 文档未打开时翻译按钮禁用；先验证拦截入口走「打开」
-    fireEvent.change(screen.getByTestId('file-path-input'), { target: { value: '/tmp/test.docx' } });
-    fireEvent.click(screen.getByTestId('open-btn'));
-    expect(await screen.findByTestId('login-overlay')).toBeInTheDocument();
-    expect(parseDoc).toHaveBeenCalledTimes(1); // 仅第一次（require_login=0 时）调用
+    const input = screen.getByTestId('file-path-input');
+    fireEvent.change(input, { target: { value: '/tmp/x.docx' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByTestId('login-dialog')).toBeInTheDocument());
+    expect(screen.getByTestId('login-hint')).toHaveTextContent('请登录后查看与翻译文档');
   });
 
-  it('require_login=0（本地）不拦截匿名打开', async () => {
-    vi.mocked(fetchMe).mockResolvedValue({
-      authenticated: false, username: null, login_enabled: true, require_login: false,
-    });
+  it('翻译熔断（limit_reached）→ QuotaExceededCard，已译部分保留', async () => {
     vi.mocked(parseDoc).mockResolvedValue(doc);
+    vi.mocked(translateDoc).mockImplementation(
+      async (_id, _src, _tgt, onProgress: (p: TranslateProgress) => void) => {
+        onProgress({ block_id: 'b1', current: 1, total: 4, status: 'done', translated_text: '引言' });
+        // 第二块熔断
+        const { QuotaLimitError } = await import('../services/backend');
+        throw new QuotaLimitError({ limit: 5, used: 5, required: 1 });
+      },
+    );
     render(<App />);
-    fireEvent.change(screen.getByTestId('file-path-input'), { target: { value: '/tmp/test.docx' } });
-    fireEvent.click(screen.getByTestId('open-btn'));
-    await waitFor(() => expect(parseDoc).toHaveBeenCalled());
-    expect(screen.queryByTestId('login-overlay')).not.toBeInTheDocument();
+    const input = screen.getByTestId('file-path-input');
+    fireEvent.change(input, { target: { value: '/tmp/test.docx' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    // 已译部分保留
+    await waitFor(() => expect(screen.getByText('引言')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('quota-exceeded-card')).toBeInTheDocument());
+  });
+
+  it('翻译取消（cancelled）→ 暂停态 + [继续翻译] 按钮', async () => {
+    vi.mocked(parseDoc).mockResolvedValue(doc);
+    vi.mocked(translateDoc).mockImplementation(async () => {
+      const { TranslateCancelledError } = await import('../services/backend');
+      throw new TranslateCancelledError(2);
+    });
+    render(<App />);
+    const input = screen.getByTestId('file-path-input');
+    fireEvent.change(input, { target: { value: '/tmp/test.docx' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByTestId('translate-control')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('translate-continue-btn')).toBeInTheDocument());
   });
 });

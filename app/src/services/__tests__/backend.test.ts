@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BackendError, originalPdfUrl, parseDoc, resourceUrl, translateDoc } from '../backend';
+import { BackendError, cancelTranslate, fetchQuota, originalPdfUrl, parseDoc, resourceUrl, translateDoc } from '../backend';
 
 function sseResponse(frames: string[], init?: ResponseInit): Response {
   const encoder = new TextEncoder();
@@ -124,5 +124,87 @@ describe('translateDoc', () => {
 describe('resourceUrl', () => {
   it('生成编码后的资源直链', () => {
     expect(resourceUrl('doc 1', 'r01_image')).toBe('/api/resource/doc%201/r01_image');
+  });
+});
+
+// ────────────────── v2.4：配额查询 / 取消 / token 附带 ──────────────────
+
+describe('fetchQuota（v2.4 T3）', () => {
+  it('返回匿名配额状态', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ anonymous: true, unlimited: false, limit: 5, used: 2, remaining: 3 }), { status: 200 }),
+      ),
+    );
+    const q = await fetchQuota();
+    expect(q).toEqual({ anonymous: true, unlimited: false, limit: 5, used: 2, remaining: 3 });
+  });
+});
+
+describe('cancelTranslate（v2.4 T5）', () => {
+  it('POST cancel 附带 token query；404 幂等忽略', async () => {
+    const { rememberToken } = await import('../docToken');
+    rememberToken('docX', 'tok-123');
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 404 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(cancelTranslate('docX')).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/translate/docX/cancel?token=tok-123',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('非 404 错误抛 BackendError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: '无权访问' }), { status: 403 })),
+    );
+    await expect(cancelTranslate('docNoToken')).rejects.toThrow('无权访问');
+  });
+});
+
+describe('translateDoc SSE 新事件（v2.4 T5）', () => {
+  it('limit_reached → QuotaLimitError（结构化字段）', async () => {
+    const frames = ['event: limit_reached\ndata: {"limit":5,"used":5,"required":1}\n\n'];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(frames)));
+    await expect(translateDoc('d1', 'en', 'zh', () => {})).rejects.toMatchObject({
+      name: 'QuotaLimitError',
+      quota: { limit: 5, used: 5, required: 1 },
+    });
+  });
+
+  it('cancelled → TranslateCancelledError（translated_pages）', async () => {
+    const frames = ['event: cancelled\ndata: {"translated_pages":3}\n\n'];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(frames)));
+    await expect(translateDoc('d1', 'en', 'zh', () => {})).rejects.toMatchObject({
+      name: 'TranslateCancelledError',
+      translatedPages: 3,
+    });
+  });
+
+  it('请求体携带 access_token（docToken 已登记时）', async () => {
+    const { rememberToken } = await import('../docToken');
+    rememberToken('d-tok', 'tok-abc');
+    const frames = ['event: complete\ndata: {"doc_id":"d-tok","pairs":[]}\n\n'];
+    const fetchMock = vi.fn().mockResolvedValue(sseResponse(frames));
+    vi.stubGlobal('fetch', fetchMock);
+    await translateDoc('d-tok', 'en', 'zh', () => {});
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.access_token).toBe('tok-abc');
+  });
+
+  it('402 响应 → BackendError 携带 quota 字段', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: '额度不足', limit: 5, used: 5, required: 10 }), { status: 402 }),
+      ),
+    );
+    await expect(translateDoc('d1', 'en', 'zh', () => {})).rejects.toMatchObject({
+      name: 'BackendError',
+      status: 402,
+      quota: { limit: 5, used: 5, required: 10 },
+    });
   });
 });

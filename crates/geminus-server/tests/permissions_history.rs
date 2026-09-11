@@ -145,7 +145,7 @@ async fn anonymous_document_and_translate_are_401_but_logged_in_ok() {
     let resp = app.clone().oneshot(parse_req(Some(&cookie))).await.unwrap();
     assert_eq!(resp.status(), 200);
     let doc = body_json(resp).await;
-    assert!(doc["blocks"].as_array().unwrap().len() > 0);
+    assert!(!doc["blocks"].as_array().unwrap().is_empty());
     let doc_id = doc["id"].as_str().unwrap().to_string();
 
     // 匿名查看原文档 → 401；登录查看 → 200

@@ -301,7 +301,7 @@ mod tests {
 
     #[test]
     fn force_restore_all_present_equals_restore() {
-        let (slotted, slots) = extract("a $x$ b $y$");
+        let (_slotted, slots) = extract("a $x$ b $y$");
         let (out, missing) = force_restore("甲 {{M0}} 乙 {{M1}}", &slots);
         assert_eq!(out, restore("甲 {{M0}} 乙 {{M1}}", &slots));
         assert!(missing.is_empty());

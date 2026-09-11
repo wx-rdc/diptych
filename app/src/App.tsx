@@ -1,27 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Block, GDocument, ParseProgress, RenderMode, TranslateProgress } from './types';
-import { parseDoc, parseDocUpload, translateDoc, fetchDocument, BackendError } from './services/backend';
+import type { Block, GDocument, RenderMode, TranslateProgress } from './types';
+import {
+  translateDoc,
+  fetchDocument,
+  BackendError,
+  QuotaLimitError,
+  TranslateCancelledError,
+  type QuotaInfo,
+} from './services/backend';
 import { fetchMe, logout } from './services/auth';
 import { fetchHistory, type HistoryItem } from './services/history';
-import Toolbar, { type TranslateButtonState } from './components/Toolbar';
+import Toolbar from './components/Toolbar';
 import StatusBar from './components/StatusBar';
 import DocumentViewer from './components/DocumentViewer';
 import PdfCompareView from './components/PdfCompareView';
 import LoginDialog from './components/LoginDialog';
 import HistoryPanel from './components/HistoryPanel';
+import QuotaExceededCard from './components/QuotaExceededCard';
+import TranslateControl from './components/TranslateControl';
 import type { ParagraphToolbarInteractive } from './components/BlockRenderer';
 import { useReadingFontSize } from './hooks/useReadingFontSize';
+import { useQuotaGuard } from './hooks/useQuotaGuard';
+import { useAutoPipeline } from './hooks/useAutoPipeline';
 import { paragraphPlainText } from './types';
 
 export default function App() {
   const [filePath, setFilePath] = useState('');
-  // 部署安全加固：上传文件（选择后优先于路径输入）
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [doc, setDoc] = useState<GDocument | null>(null);
   const [translatedMap, setTranslatedMap] = useState<Record<string, Block | null>>({});
   const [sourceLang, setSourceLang] = useState('en');
   const [targetLang, setTargetLang] = useState('zh');
-  const [parsing, setParsing] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [progress, setProgress] = useState<TranslateProgress | null>(null);
   const [stats, setStats] = useState({ done: 0, cached: 0, errors: 0 });
@@ -29,10 +37,15 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   // v2.1：翻译失败回退原文的块（右栏「未翻译」徽标）
   const [fallbackIds, setFallbackIds] = useState<Set<string>>(new Set());
-  // v2.1：翻译完成态（按钮状态机 done 分支）
+  // v2.1：翻译完成态
   const [lastDone, setLastDone] = useState(false);
-  // v2：MinerU 解析进度 + 渲染模式
-  const [parseProgress, setParseProgress] = useState<ParseProgress | null>(null);
+  // v2.4 T3/T6：熔断卡片（额度用尽；已译部分保留可读）
+  const [limitInfo, setLimitInfo] = useState<QuotaInfo | null>(null);
+  // v2.4 T3/T5：暂停态（用户停止 / 断开）→ [继续翻译]
+  const [paused, setPaused] = useState(false);
+  // v2.4 T3：自动翻译是否已对该文档执行过（仅首次自动，防循环）
+  const autoTranslatedRef = useRef<string | null>(null);
+  // v2：渲染模式
   const [renderMode, setRenderMode] = useState<RenderMode>('original');
   // v2.3 C1：左栏 pdf.js 致命失败 → 自动降级文本对照 + 横幅重试
   const [pdfViewerError, setPdfViewerError] = useState<string | null>(null);
@@ -46,17 +59,14 @@ export default function App() {
   const [username, setUsername] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginHint, setLoginHint] = useState<string | null>(null);
-  // v2.4：服务器权限模式（require_login=1 时未登录拦截打开/翻译）
-  const [requireLogin, setRequireLogin] = useState(false);
-  // v2.4：登录后续跑的挂起动作（打开/翻译）
-  const pendingActionRef = useRef<(() => void) | null>(null);
+
+  // v2.4 T3：零点击流水线 + 本地配额预检
+  const quotaGuard = useQuotaGuard();
+  const pipeline = useAutoPipeline();
 
   useEffect(() => {
     fetchMe()
-      .then((me) => {
-        setUsername(me.username);
-        setRequireLogin(!!me.require_login);
-      })
+      .then((me) => setUsername(me.username))
       .catch(() => setUsername(null));
   }, []);
 
@@ -65,10 +75,6 @@ export default function App() {
     setLoginOpen(false);
     setLoginHint(null);
     setError(null);
-    // 登录成功 → 自动续跑被拦截的动作（v2.4 T1）
-    const pending = pendingActionRef.current;
-    pendingActionRef.current = null;
-    pending?.();
   }, []);
 
   const handleLogout = useCallback(async () => {
@@ -81,46 +87,30 @@ export default function App() {
     setLoginOpen(true);
   }, []);
 
-  // v2.4 T1：服务器要求登录且未登录 → 拦截动作，登录后自动续跑
-  const requireAuth = useCallback(
-    (action: () => void, hint?: string) => {
-      if (!requireLogin || username) {
-        action();
-        return;
-      }
-      pendingActionRef.current = action;
-      openLogin(hint ?? '登录后即可打开并翻译文档');
-    },
-    [requireLogin, username, openLogin],
-  );
-
   // v2.3 C1：左栏致命失败（worker 加载等）→ 切文本对照（IR 已有原文文本，左栏不空白）
   const handleOriginalFatal = useCallback((msg: string) => {
     setPdfViewerError(msg);
     setRenderMode('text');
   }, []);
 
-  // 429（未登录额度用尽）/ 401 → 提示并引导登录
   const reportError = useCallback(
     (e: unknown) => {
+      // v2.4 T3.5：解析预检 402 → QuotaExceededCard（结构化配额字段）
+      if (e instanceof BackendError && e.quota) {
+        setLimitInfo(e.quota);
+        return;
+      }
       const message = e instanceof Error ? e.message : String(e);
       setError(message);
-      if (e instanceof BackendError && (e.status === 429 || e.status === 401)) {
+      if (e instanceof BackendError && (e.status === 401 || e.status === 403)) {
         openLogin(message);
       }
     },
     [openLogin],
   );
 
-  const handlePickFile = useCallback((file: File) => {
-    setUploadFile(file);
-    setFilePath(file.name);
-    setError(null);
-  }, []);
-
   const handleFilePathChange = useCallback((v: string) => {
     setFilePath(v);
-    setUploadFile(null); // 手动编辑路径 = 放弃已选文件
   }, []);
 
   // v2.4：双栏滚动容器（useHoverDrivenSync 在两侧视图内接管同步）
@@ -131,96 +121,136 @@ export default function App() {
   // 来源文件类型（徽章）：优先上传文件名，其次路径扩展名；文档打开后保持
   const [fileType, setFileType] = useState<'docx' | 'pdf' | null>(null);
 
-  const blockMap = useMemo(() => {
-    const m: Record<string, Block> = {};
-    if (doc) for (const b of doc.blocks) m[b.id] = b;
-    return m;
-  }, [doc]);
-
-  async function runParse() {
-    setParsing(true);
-    setError(null);
-    setParseProgress(null);
-    try {
-      const name = (uploadFile?.name ?? filePath).trim().toLowerCase();
-      const d = uploadFile
-        ? await parseDocUpload(uploadFile, 'auto', setParseProgress)
-        : await parseDoc(filePath.trim(), 'auto', setParseProgress);
-      setFileType(name.endsWith('.pdf') ? 'pdf' : 'docx');
-      setDoc(d);
-      setTranslatedMap({});
-      setProgress(null);
-      setStats({ done: 0, cached: 0, errors: 0 });
-      // PDF 且带 pdf_meta → 默认原始渲染模式；否则文本对照
-      setRenderMode(d.pdf_meta ? 'original' : 'text');
-    } catch (e) {
-      setDoc(null);
-      reportError(e);
-    } finally {
-      setParsing(false);
-    }
-  }
-
-  // v2.4：打开动作经登录拦截（require_login=1 时弹框，登录后续跑）
-  const handleParse = useCallback(
-    () => requireAuth(runParse, '登录后即可打开并翻译文档'),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [requireAuth, uploadFile, filePath],
-  );
-
-  async function runTranslate() {
-    if (!doc) return;
-    setTranslating(true);
-    setError(null);
-    setStats({ done: 0, cached: 0, errors: 0 });
+  /** 解析成功 → 应用文档状态（runParse/历史回载/零点击流水线共用） */
+  const applyDoc = useCallback((d: GDocument, name: string) => {
+    setDoc(d);
+    setTranslatedMap({});
     setProgress(null);
+    setStats({ done: 0, cached: 0, errors: 0 });
     setFallbackIds(new Set());
     setLastDone(false);
-    try {
-      const result = await translateDoc(doc.id, sourceLang, targetLang, (p) => {
-        setProgress(p);
-        if (p.status === 'done') setStats((s) => ({ ...s, done: s.done + 1 }));
-        else if (p.status === 'cached') setStats((s) => ({ ...s, cached: s.cached + 1 }));
-        else if (p.status === 'error') setStats((s) => ({ ...s, errors: s.errors + 1 }));
+    setLimitInfo(null);
+    setPaused(false);
+    autoTranslatedRef.current = null;
+    setFileType(name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'docx');
+    setRenderMode(d.pdf_meta ? 'original' : 'text');
+  }, []);
 
-        const text = p.translated_text;
-        if (text) {
-          // 流式预览：先用纯文本回填，complete 后用权威结果（含行内资产）
-          const orig = blockMap[p.block_id];
-          const origStyle = orig?.type === 'paragraph' ? orig.style : {};
-          setTranslatedMap((prev) => ({
-            ...prev,
-            [p.block_id]: {
-              type: 'paragraph',
-              id: p.block_id,
-              style: origStyle,
-              content: [{ type: 'text', text }],
-            },
-          }));
+  /** 翻译执行（零点击自动 / 继续 / 重新翻译共用） */
+  const runTranslate = useCallback(
+    async (target: GDocument) => {
+      if (!target) return;
+      setTranslating(true);
+      setError(null);
+      setLimitInfo(null);
+      setPaused(false);
+      setStats({ done: 0, cached: 0, errors: 0 });
+      setProgress(null);
+      setFallbackIds(new Set());
+      setLastDone(false);
+      const map = (() => {
+        const m: Record<string, Block> = {};
+        for (const b of target.blocks) m[b.id] = b;
+        return m;
+      })();
+      try {
+        const result = await translateDoc(target.id, sourceLang, targetLang, (p) => {
+          setProgress(p);
+          if (p.status === 'done') setStats((s) => ({ ...s, done: s.done + 1 }));
+          else if (p.status === 'cached') setStats((s) => ({ ...s, cached: s.cached + 1 }));
+          else if (p.status === 'error') setStats((s) => ({ ...s, errors: s.errors + 1 }));
+
+          const text = p.translated_text;
+          if (text) {
+            // 流式预览：先用纯文本回填，complete 后用权威结果（含行内资产）
+            const orig = map[p.block_id];
+            const origStyle = orig?.type === 'paragraph' ? orig.style : {};
+            setTranslatedMap((prev) => ({
+              ...prev,
+              [p.block_id]: {
+                type: 'paragraph',
+                id: p.block_id,
+                style: origStyle,
+                content: [{ type: 'text', text }],
+              },
+            }));
+          }
+        });
+        const finalMap: Record<string, Block | null> = {};
+        const fbIds = new Set<string>();
+        for (const pair of result.pairs) {
+          finalMap[pair.block_id] = pair.translated;
+          if (pair.fallback) fbIds.add(pair.block_id);
         }
-      });
-      const finalMap: Record<string, Block | null> = {};
-      const fbIds = new Set<string>();
-      for (const pair of result.pairs) {
-        finalMap[pair.block_id] = pair.translated;
-        if (pair.fallback) fbIds.add(pair.block_id);
+        setTranslatedMap(finalMap);
+        setFallbackIds(fbIds);
+        setLastDone(true);
+      } catch (e) {
+        if (e instanceof QuotaLimitError) {
+          // 熔断：已译部分（translatedMap）保留可读，QuotaExceededCard 引导登录
+          setLimitInfo(e.quota);
+        } else if (e instanceof TranslateCancelledError) {
+          // 暂停态：[继续翻译] 走缓存秒回 + 增量续译
+          setPaused(true);
+        } else {
+          reportError(e);
+        }
+      } finally {
+        setTranslating(false);
       }
-      setTranslatedMap(finalMap);
-      setFallbackIds(fbIds);
-      setLastDone(true);
+    },
+    [sourceLang, targetLang, reportError],
+  );
+
+  // v2.4 T3 零点击：选择文件 → 本地预检 → 自动解析 → 自动翻译
+  const handlePickFile = useCallback(
+    async (file: File) => {
+      setFilePath(file.name);
+      setError(null);
+      pipeline.reset();
+      try {
+        const d = await pipeline.runUpload(file, 'auto', () => quotaGuard.check(file));
+        if (!d) {
+          // 预检拦截：不上传，引导登录
+          if (quotaGuard.result.blocked) {
+            setError(quotaGuard.result.message);
+          }
+          return;
+        }
+        applyDoc(d, file.name);
+        if (autoTranslatedRef.current !== d.id) {
+          autoTranslatedRef.current = d.id;
+          await runTranslate(d);
+        }
+      } catch (e) {
+        reportError(e);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pipeline, quotaGuard, applyDoc, runTranslate, reportError],
+  );
+
+  // 本地路径开发分支（Enter 触发同款零点击流水线）
+  const handleParseLocal = useCallback(async () => {
+    const path = filePath.trim();
+    if (!path) return;
+    setError(null);
+    pipeline.reset();
+    try {
+      const d = await pipeline.runPath(path, 'auto', (name) =>
+        quotaGuard.check(new File([], name || path)),
+      );
+      if (!d) return;
+      applyDoc(d, path);
+      if (autoTranslatedRef.current !== d.id) {
+        autoTranslatedRef.current = d.id;
+        await runTranslate(d);
+      }
     } catch (e) {
       reportError(e);
-    } finally {
-      setTranslating(false);
     }
-  }
-
-  // v2.4：翻译动作经登录拦截
-  const handleTranslate = useCallback(
-    () => requireAuth(runTranslate, '登录后即可翻译全文'),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [requireAuth, doc, blockMap, sourceLang, targetLang],
-  );
+  }, [filePath, pipeline, quotaGuard, applyDoc, runTranslate, reportError]);
 
   // v2.1 T7.2：单段重译回填（工具条回调）
   const handleRetranslated = useCallback(
@@ -254,27 +284,23 @@ export default function App() {
     }
   }, [historyOpen, reportError]);
 
-  // v2.4 T2：历史条目回载（无需重新上传）
+  // v2.4 T2：历史条目回载（无需重新上传；登录用户自动续译）
   const openHistoryItem = useCallback(
     async (item: HistoryItem) => {
       try {
         const d = await fetchDocument(item.doc_id);
-        setDoc(d);
+        applyDoc(d, item.file_name);
         setFilePath(item.file_name);
-        setUploadFile(null);
-        setFileType(item.file_type === 'pdf' ? 'pdf' : 'docx');
-        setTranslatedMap({});
-        setProgress(null);
-        setStats({ done: 0, cached: 0, errors: 0 });
-        setLastDone(false);
-        setRenderMode(d.pdf_meta ? 'original' : 'text');
         setHistoryOpen(false);
-        setError(null);
+        if (autoTranslatedRef.current !== d.id) {
+          autoTranslatedRef.current = d.id;
+          await runTranslate(d);
+        }
       } catch (e) {
         reportError(e);
       }
     },
-    [reportError],
+    [applyDoc, runTranslate, reportError],
   );
 
   // v2.1 T7.2：译文侧段落交互（hover 工具条）
@@ -294,23 +320,13 @@ export default function App() {
     [doc, translatedMap, sourceLang, targetLang, handleRetranslated],
   );
 
-  // v2.1 T7.1：翻译按钮状态机
-  const buttonState: TranslateButtonState = translating
-    ? { kind: 'translating', current: progress?.current ?? 0, total: progress?.total ?? 0 }
-    : error
-      ? { kind: 'error' }
-      : lastDone
-        ? { kind: 'done', errors: stats.errors }
-        : { kind: 'idle' };
-
   return (
     <div className="relative flex h-full flex-col bg-slate-100 text-slate-800">
       <Toolbar
         filePath={filePath}
         onFilePathChange={handleFilePathChange}
-        onParse={handleParse}
-        parsing={parsing}
-        parseProgress={parseProgress}
+        onParseLocal={handleParseLocal}
+        parseProgress={pipeline.state.parseProgress}
         renderMode={renderMode}
         onRenderModeChange={setRenderMode}
         canToggleRenderMode={!!doc?.pdf_meta && fileType === 'pdf'}
@@ -319,13 +335,9 @@ export default function App() {
         targetLang={targetLang}
         onSourceLangChange={setSourceLang}
         onTargetLangChange={setTargetLang}
-        onTranslate={handleTranslate}
-        translating={translating}
-        canTranslate={doc !== null}
         fontSize={fontSize}
         onFontIncrease={fontIncrease}
         onFontDecrease={fontDecrease}
-        buttonState={buttonState}
         onPickFile={handlePickFile}
         username={username}
         onLoginClick={() => openLogin()}
@@ -384,7 +396,7 @@ export default function App() {
       ) : (
         <main className="flex flex-1 flex-col items-center justify-center gap-2 text-slate-400">
           <div className="text-5xl">📄</div>
-          <p className="text-sm">点击「📁 选择文件」上传 .docx / .pdf 文档</p>
+          <p className="text-sm">点击「📁 选择文件」——自动解析并翻译，无需其他操作</p>
           {error ? (
             <p className="max-w-md text-sm text-red-500" data-testid="empty-error">
               {error}
@@ -394,6 +406,28 @@ export default function App() {
       )}
 
       <StatusBar progress={progress} translating={translating} stats={stats} error={error} />
+
+      {/* v2.4 T5/T6：翻译控制（进度 + 停止/继续/重新翻译） */}
+      {doc ? (
+        <TranslateControl
+          doc={doc}
+          translating={translating}
+          paused={paused}
+          done={lastDone}
+          progress={progress}
+          onContinue={() => doc && runTranslate(doc)}
+          onRetranslate={() => doc && runTranslate(doc)}
+        />
+      ) : null}
+
+      {/* v2.4 T6：额度用尽引导卡片（已译部分保留可读） */}
+      {limitInfo ? (
+        <QuotaExceededCard
+          quota={limitInfo}
+          onLogin={() => openLogin('登录后不限量翻译；登录成功后可继续翻译本文档')}
+          onDismiss={() => setLimitInfo(null)}
+        />
+      ) : null}
 
       {historyOpen ? (
         <HistoryPanel

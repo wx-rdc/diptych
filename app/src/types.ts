@@ -10,6 +10,8 @@ export interface GDocument {
   render_meta?: Record<string, RenderMeta>;
   /** v2：PDF 页面尺寸（存在时支持原始渲染模式） */
   pdf_meta?: PdfMeta | null;
+  /** v2.4：匿名文档访问凭证（上传响应附带；查看/翻译/资源直链防盗链三选一之一） */
+  access_token?: string;
 }
 
 /** 块级渲染坐标：bbox 原点=左上，PDF 点（与 pdf.js viewport 同坐标系） */

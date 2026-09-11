@@ -8,9 +8,14 @@ fn repo_path(rel: &str) -> std::path::PathBuf {
 }
 
 /// 真实测试文档：97 段、1 张 VML 图片（水平线）、无表格/公式
+/// （私有文档未随社区版分发——缺失时跳过而非失败）
 #[test]
 fn parses_real_document() {
     let path = repo_path("test/Response-to-Reviewers-Access-2026-38888.docx");
+    if !path.exists() {
+        eprintln!("跳过：私有文档 {} 不在本仓库", path.display());
+        return;
+    }
     let doc = parse_docx(&path).expect("真实文档应可解析");
     assert!(
         doc.blocks.len() >= 90,
