@@ -725,7 +725,7 @@ async fn parse_from_path(
                 }
                 eprintln!("[parse] {} [{}] {} 块", ft.label(), path.display(), doc.blocks.len());
                 register_doc(state, &doc, &path, &hash_of(state, &doc, &path), user.as_deref(), &display_name);
-                let token = issue_doc_access(state, &doc.id, ip.as_deref(), user.is_some());
+                let token = issue_doc_access(state, &doc.id, ip.as_deref(), user.is_some(), &display_name);
                 let mut body = if anon_shell {
                     doc_shell(&doc)
                 } else {
@@ -807,7 +807,7 @@ async fn parse_from_path(
                 .await;
             // v2.4：解析不实扣（实扣在翻译循环）；预检已在解析前完成
             register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
-            let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
+            let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some(), &display_name2);
             send_done(&tx, &doc, anon_shell, &token).await;
             drop(stage_tx);
             let _ = forwarder.await;
@@ -827,7 +827,7 @@ async fn parse_from_path(
                         geminus_core::cache::IR_SCHEMA_VERSION);
                     // v2.4：解析不实扣（实扣在翻译循环）
                     register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
-                    let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
+                    let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some(), &display_name2);
                     send_done(&tx, &doc, anon_shell, &token).await;
                     drop(stage_tx);
                     let _ = forwarder.await;
@@ -893,7 +893,7 @@ async fn parse_from_path(
                 }
                 // v2.4：解析不实扣（实扣在翻译循环）；预检已在解析前完成
                 register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
-                let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some());
+                let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some(), &display_name2);
                 send_done(&tx, &doc, anon_shell, &token).await;
             }
             None => {
@@ -957,9 +957,15 @@ fn file_stem(path: &std::path::Path) -> String {
 /// - 公网匿名上传 → token + uploader_ip + 匿名标记（24h TTL 清理范围）；
 /// - 登录上传 → 仅 token（Session 即访问权）；
 /// - 本地开发（无代理头）→ 仅 token（直连放行，不参与 TTL）。
-fn issue_doc_access(state: &AppState, doc_id: &str, ip: Option<&str>, logged_in: bool) -> String {
+fn issue_doc_access(
+    state: &AppState,
+    doc_id: &str,
+    ip: Option<&str>,
+    logged_in: bool,
+    file_name: &str,
+) -> String {
     let is_anon = !logged_in && ip.is_some();
-    state.doc_access.issue(doc_id, ip, is_anon)
+    state.doc_access.issue(doc_id, ip, is_anon, file_name)
 }
 
 /// v2.2 T1：把 MinerU 在线解析的 work_dir（chunk_NN 解压目录）持久化到
@@ -1141,10 +1147,12 @@ async fn translate_handler(
         return err_response(StatusCode::NOT_FOUND, format!("文档不存在: {}", req.doc_id));
     };
 
-    // v2.4 T5 三段式：匿名翻译开流前置检查（剩余 ≥1 页；循环内逐批熔断）
+    // v2.4 T5 三段式：匿名翻译开流前置检查（剩余 ≥1 页；循环内逐批熔断）。
+    // 回访豁免：该文档存在已付费批 → 放行（缓存秒回 + 已付批续译，零新增消耗）
     let ip = if user.is_some() { None } else { client_ip(&headers) };
     if let Some(ip) = &ip {
-        if state.quota.remaining(ip) < 1 {
+        let hash = state.content_hash_of(&req.doc_id);
+        if state.quota.remaining(ip) < 1 && !state.quota.has_any_charged_batch(ip, &hash) {
             return quota_402(&state, ip, 1);
         }
     }
@@ -1186,10 +1194,14 @@ async fn translate_handler(
                 outcome = Some("cancelled");
                 break;
             }
-            // 控制点 ③：匿名熔断检查点（remaining < 本批页数）
+            // 控制点 ③：匿名熔断检查点（remaining < 本批页数）。
+            // 已付费批豁免——回访/续译已译文档走缓存秒回（零 LLM 调用、实扣幂等跳过），
+            // 兑现「已翻译的部分仍可继续阅读（与续译）」承诺。
             if let Some(ip) = quota_ip.as_deref() {
                 let remaining = quota.remaining(ip);
-                if remaining < batch.pages {
+                if remaining < batch.pages
+                    && !quota.already_charged_batch(ip, &hash, batch_idx as i64)
+                {
                     let used = quota.used_pages(ip);
                     let _ = tx
                         .send(Ok(Event::default().event("limit_reached").data(
@@ -1340,6 +1352,25 @@ async fn quota_status_handler(State(state): State<AppState>, headers: HeaderMap)
             None => Json(unlimited).into_response(),
         },
     }
+}
+
+/// v2.4.1：游客额度消耗明细——「已使用的 N 页在哪里」追溯（匿名按 IP；登录用户有 /api/history）。
+/// 仅返回匿名上传且未过期（24h TTL 内）的文档：doc_id/file_name/时间；回访走 token 防盗链。
+async fn quota_usage_handler(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let Some(ip) = client_ip(&headers) else {
+        // 本地直连（无代理头）：不参与 IP 记账，无可追溯用量
+        return Json(json!({ "items": [], "note": "本地直连不计费" })).into_response();
+    };
+    let items: Vec<serde_json::Value> = state
+        .doc_access
+        .list_by_ip(&ip, 50)
+        .into_iter()
+        .filter(|(_, _, is_anon, _)| *is_anon)
+        .map(|(doc_id, file_name, _, created_at)| {
+            json!({ "doc_id": doc_id, "file_name": file_name, "uploaded_at": created_at })
+        })
+        .collect();
+    Json(json!({ "items": items })).into_response()
 }
 
 /// v2.4 T5：取消进行中的翻译任务（三选一校验同查看；?token= 供匿名持有者）
@@ -1654,6 +1685,7 @@ pub fn build_app(state: AppState) -> Router {
         .route("/api/documents/:doc_id", get(get_document_handler))
         .route("/api/history", get(history_handler))
         .route("/api/quota", get(quota_status_handler))
+        .route("/api/quota/usage", get(quota_usage_handler))
         .route("/api/resource/:doc_id/:rid", get(resource_handler))
         .route("/api/original/:doc_id", get(original_pdf_handler))
         .route("/api/config/mineru", get(mineru_config_get_handler).post(mineru_config_post_handler))

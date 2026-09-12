@@ -332,3 +332,60 @@ async fn cancel_endpoint_gated_by_access() {
         .unwrap();
     assert_eq!(resp.status(), 403, "陌生 IP 不能取消他人任务");
 }
+
+/// v2.4.1 修复回归：额度耗尽后回访已译文档 → 已付费批豁免熔断 → 缓存秒回（零新增 LLM 调用）。
+/// 限额 2 = two_column.pdf 全文；译完额度满 → 回访时批 1（已付）缓存重放、批 2（已付）同样豁免
+/// → 全文秒回 complete；随后验证新文档（未付费）仍正常熔断。
+#[tokio::test]
+async fn revisit_after_quota_exhausted_replays_from_cache() {
+    let (llm, count) = spawn_counting_mock_llm().await;
+    let app = make_app(&llm, QuotaStore::open_in_memory(2).unwrap());
+    let ip: &[(&str, &str)] = &[("x-real-ip", "203.0.113.70")];
+    let doc_id = parse_pdf(&app, "two_column.pdf", ip).await; // 2 页（2 批）
+
+    // 第一轮：完整译完（扣满 2/2）
+    let resp = post_translate(&app, serde_json::json!({ "doc_id": doc_id }), ip).await;
+    let events = read_sse_while(resp, |ev| ev.event != "complete").await;
+    assert!(events.iter().any(|e| e.event == "complete"), "第一轮完整译完");
+    let llm_first = count.load(Ordering::SeqCst);
+    assert!(llm_first > 0);
+
+    // 第二轮回访（额度 0/2 剩 0）：两批均已付费 → 全部豁免熔断 → 缓存秒回 complete
+    let resp = post_translate(&app, serde_json::json!({ "doc_id": doc_id }), ip).await;
+    let events = read_sse_while(resp, |ev| ev.event != "complete").await;
+    assert!(
+        events.iter().any(|e| e.event == "complete"),
+        "已付费批豁免熔断：额度耗尽也能全文缓存秒回"
+    );
+    let cached_n = events
+        .iter()
+        .filter(|e| e.event == "progress")
+        .filter_map(|e| serde_json::from_str::<serde_json::Value>(&e.data).ok())
+        .filter(|p| p["status"] == "cached")
+        .count();
+    assert!(cached_n > 0, "回访以缓存事件秒回（可读）");
+    assert_eq!(
+        count.load(Ordering::SeqCst),
+        llm_first,
+        "回访零新增 LLM 调用（已付费批缓存重放）"
+    );
+
+    // 对照：同一 IP 再译新文档（未付费批）→ 预检 402（2 页 > 剩 0），熔断防线仍在
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/parse")
+                .header("content-type", "application/json")
+                .header("x-real-ip", "203.0.113.70")
+                .body(axum::body::Body::from(
+                    serde_json::json!({ "file_path": pdf_fixture("mixed_layout.pdf").to_string_lossy(), "parser": "builtin" })
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 402, "未付费新文档仍被预检拦截");
+}

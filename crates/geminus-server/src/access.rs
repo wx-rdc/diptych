@@ -24,11 +24,33 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS doc_access (
     access_token TEXT NOT NULL,
     uploader_ip TEXT,
     is_anonymous INTEGER NOT NULL DEFAULT 0,
+    file_name TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL
 )";
 
 impl DocAccessStore {
     fn open(conn: rusqlite::Connection) -> Self {
+        // v2.4.1 迁移：早期建表无 file_name 列 → 补列（默认空串）
+        let has_file_name = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('doc_access') WHERE name = 'file_name'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+        let table_exists = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'doc_access'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+        if table_exists && !has_file_name {
+            conn.execute_batch("ALTER TABLE doc_access ADD COLUMN file_name TEXT NOT NULL DEFAULT ''")
+                .expect("doc_access 迁移失败");
+        }
         conn.execute_batch(SCHEMA).expect("doc_access 表创建失败");
         Self { conn: Mutex::new(conn) }
     }
@@ -48,16 +70,16 @@ impl DocAccessStore {
 
     /// 登记文档访问凭证，返回该文档的 access_token。
     /// token 仅首次生成（重传/回源不轮换，持有者不失效）；uploader_ip 每次更新。
-    pub fn issue(&self, doc_id: &str, uploader_ip: Option<&str>, is_anonymous: bool) -> String {
+    pub fn issue(&self, doc_id: &str, uploader_ip: Option<&str>, is_anonymous: bool, file_name: &str) -> String {
         let token = uuid::Uuid::new_v4().to_string();
         let conn = self.conn.lock().unwrap();
         let _ = conn.execute(
-            "INSERT INTO doc_access (doc_id, access_token, uploader_ip, is_anonymous, created_at)
-             VALUES (?1, ?2, ?3, ?4, unixepoch())
+            "INSERT INTO doc_access (doc_id, access_token, uploader_ip, is_anonymous, file_name, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, unixepoch())
              ON CONFLICT(doc_id) DO UPDATE SET
                 uploader_ip = excluded.uploader_ip,
                 is_anonymous = excluded.is_anonymous",
-            rusqlite::params![doc_id, token, uploader_ip, is_anonymous as i64],
+            rusqlite::params![doc_id, token, uploader_ip, is_anonymous as i64, file_name],
         );
         conn.query_row(
             "SELECT access_token FROM doc_access WHERE doc_id = ?1",
@@ -127,6 +149,29 @@ impl DocAccessStore {
         }
         expired
     }
+
+    /// v2.4.1：某 IP 名下（上传者匹配）的文档清单——游客额度「用在哪了」的追溯数据源。
+    /// 返回 (doc_id, file_name, is_anonymous, created_at)，新→旧排序。
+    pub fn list_by_ip(&self, ip: &str, limit: i64) -> Vec<(String, String, bool, i64)> {
+        let conn = self.conn.lock().unwrap();
+        let Ok(mut stmt) = conn.prepare(
+            "SELECT doc_id, file_name, is_anonymous, created_at FROM doc_access
+             WHERE uploader_ip = ?1
+             ORDER BY created_at DESC, doc_id LIMIT ?2",
+        ) else {
+            return Vec::new();
+        };
+        stmt.query_map(rusqlite::params![ip, limit], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, i64>(2)? != 0,
+                r.get::<_, i64>(3)?,
+            ))
+        })
+        .map(|rows| rows.filter_map(|r| r.ok()).collect())
+        .unwrap_or_default()
+    }
 }
 
 #[cfg(test)]
@@ -136,8 +181,8 @@ mod tests {
     #[test]
     fn issue_then_verify_token() {
         let s = DocAccessStore::open_in_memory().unwrap();
-        let t1 = s.issue("d1", Some("1.2.3.4"), true);
-        let t2 = s.issue("d2", None, false);
+        let t1 = s.issue("d1", Some("1.2.3.4"), true, "f.pdf");
+        let t2 = s.issue("d2", None, false, "f.pdf");
         assert!(!t1.is_empty() && !t2.is_empty() && t1 != t2, "token 唯一");
         assert!(s.verify_token("d1", &t1));
         assert!(s.verify_token("d2", &t2));
@@ -149,8 +194,8 @@ mod tests {
     #[test]
     fn reissue_keeps_token_but_refreshes_ip() {
         let s = DocAccessStore::open_in_memory().unwrap();
-        let t1 = s.issue("d1", Some("1.1.1.1"), true);
-        let t2 = s.issue("d1", Some("2.2.2.2"), true);
+        let t1 = s.issue("d1", Some("1.1.1.1"), true, "f.pdf");
+        let t2 = s.issue("d1", Some("2.2.2.2"), true, "f.pdf");
         assert_eq!(t1, t2, "重传不轮换 token（持有者不失效）");
         assert_eq!(s.uploader_ip("d1").as_deref(), Some("2.2.2.2"), "IP 更新为新上传者");
     }
@@ -158,8 +203,8 @@ mod tests {
     #[test]
     fn uploader_ip_roundtrip() {
         let s = DocAccessStore::open_in_memory().unwrap();
-        s.issue("d1", Some("9.9.9.9"), true);
-        s.issue("d2", None, false);
+        s.issue("d1", Some("9.9.9.9"), true, "f.pdf");
+        s.issue("d2", None, false, "f.pdf");
         assert_eq!(s.uploader_ip("d1").as_deref(), Some("9.9.9.9"));
         assert_eq!(s.uploader_ip("d2"), None);
         assert!(!s.is_anonymous("d2"));
@@ -169,8 +214,8 @@ mod tests {
     #[test]
     fn purge_expired_only_touches_anonymous_and_old() {
         let s = DocAccessStore::open_in_memory().unwrap();
-        s.issue("anon_fresh", Some("1.1.1.1"), true);
-        s.issue("login_old", None, false);
+        s.issue("anon_fresh", Some("1.1.1.1"), true, "f.pdf");
+        s.issue("login_old", None, false, "f.pdf");
         // 手工把一条匿名记录回拨 25h
         s.conn
             .lock()
@@ -181,7 +226,7 @@ mod tests {
             )
             .unwrap();
         // anon_old 未登记过——先补一条再回拨
-        s.issue("anon_old", Some("1.1.1.1"), true);
+        s.issue("anon_old", Some("1.1.1.1"), true, "f.pdf");
         s.conn
             .lock()
             .unwrap()
@@ -201,7 +246,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("access.db");
         let s = DocAccessStore::open_at(&db).unwrap();
-        let t = s.issue("d1", Some("1.2.3.4"), true);
+        let t = s.issue("d1", Some("1.2.3.4"), true, "f.pdf");
         drop(s);
         let reopened = DocAccessStore::open_at(&db).unwrap();
         assert!(reopened.verify_token("d1", &t), "重启后 token 仍有效");

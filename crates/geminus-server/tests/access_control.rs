@@ -392,3 +392,51 @@ async fn anon_ttl_purge_clears_doc_state() {
         .unwrap();
     assert_eq!(resp.status(), 403, "token 记录已删 → 防盗链拦截");
 }
+
+/// v2.4.1：/api/quota/usage——游客额度「用在哪了」追溯（同 IP 匿名上传的文档清单 + file_name）
+#[tokio::test]
+async fn quota_usage_lists_anon_docs_by_ip() {
+    let app = anon_app();
+    let (s1, v1) = upload_pdf(&app, "198.51.100.90", "simple.pdf").await;
+    let (s2, v2) = upload_pdf(&app, "198.51.100.90", "headings.pdf").await;
+    assert_eq!(s1, 200);
+    assert_eq!(s2, 200);
+    let _ = (v1["id"].as_str().unwrap(), v2["id"].as_str().unwrap());
+
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri("/api/quota/usage")
+                .header("x-real-ip", "198.51.100.90")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let items = v["items"].as_array().expect("items 数组");
+    assert_eq!(items.len(), 2, "同 IP 两份匿名文档");
+    let names: Vec<&str> = items.iter().map(|i| i["file_name"].as_str().unwrap()).collect();
+    assert!(names.iter().any(|n| n.ends_with(".pdf")), "file_name 已记录: {names:?}");
+    assert!(items.iter().all(|i| i["doc_id"].as_str().is_some() && i["uploaded_at"].as_i64().is_some()));
+
+    // 其他 IP 看不到
+    let resp = app
+        .oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri("/api/quota/usage")
+                .header("x-real-ip", "198.51.100.91")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(v["items"].as_array().unwrap().len(), 0, "IP 隔离");
+}

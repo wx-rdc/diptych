@@ -183,6 +183,19 @@ impl QuotaStore {
             .is_ok()
     }
 
+    /// 该 (ip, hash) 是否存在任意已付费批（开流前置 402 的豁免判据——回访已译文档放行）
+    pub fn has_any_charged_batch(&self, ip: &str, content_hash: &str) -> bool {
+        self.conn
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT 1 FROM anon_page_usage WHERE ip = ?1 AND content_hash = ?2 LIMIT 1",
+                [ip, content_hash],
+                |_| Ok(()),
+            )
+            .is_ok()
+    }
+
     /// v2.4 T5：翻译循环 chunk 级实扣（BEGIN IMMEDIATE 事务，读-检-写原子）。
     /// - 批级幂等：同 (ip, hash, batch) 已扣 → Ok 直接跳过；
     /// - 事务内复核 used + pages ≤ limit，防同 IP 并发超发；
