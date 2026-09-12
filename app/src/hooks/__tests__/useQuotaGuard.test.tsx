@@ -35,7 +35,7 @@ describe('useQuotaGuard 预检边界（T3.6）', () => {
     const reader = vi.fn(pagesReader(999));
     const { result } = renderHook(() => useQuotaGuard(reader));
     await act(async () => {
-      expect(await result.current.check(new File(['x'], 'big.pdf'))).toBe(true);
+      expect((await result.current.check(new File(['x'], 'big.pdf'))).blocked).toBe(false);
     });
     expect(result.current.result).toEqual(QUOTA_GUARD_PASS);
     expect(reader).not.toHaveBeenCalled();
@@ -46,7 +46,7 @@ describe('useQuotaGuard 预检边界（T3.6）', () => {
     const reader = vi.fn(pagesReader(999));
     const { result } = renderHook(() => useQuotaGuard(reader));
     await act(async () => {
-      expect(await result.current.check(new File(['x'], 'a.docx'))).toBe(true);
+      expect((await result.current.check(new File(['x'], 'a.docx'))).blocked).toBe(false);
     });
     expect(reader).not.toHaveBeenCalled(); // DOCX 不触发页数读取
   });
@@ -55,7 +55,7 @@ describe('useQuotaGuard 预检边界（T3.6）', () => {
     vi.mocked(backend.fetchQuota).mockRejectedValue(new Error('offline'));
     const { result } = renderHook(() => useQuotaGuard(pagesReader(99)));
     await act(async () => {
-      expect(await result.current.check(new File(['x'], 'a.pdf'))).toBe(true);
+      expect((await result.current.check(new File(['x'], 'a.pdf'))).blocked).toBe(false);
     });
   });
 
@@ -63,7 +63,7 @@ describe('useQuotaGuard 预检边界（T3.6）', () => {
     vi.mocked(backend.fetchQuota).mockResolvedValue(quota(1));
     const { result } = renderHook(() => useQuotaGuard(pagesReader(null)));
     await act(async () => {
-      expect(await result.current.check(new File(['x'], 'a.pdf'))).toBe(true);
+      expect((await result.current.check(new File(['x'], 'a.pdf'))).blocked).toBe(false);
     });
     expect(result.current.result.blocked).toBe(false);
   });
@@ -72,7 +72,7 @@ describe('useQuotaGuard 预检边界（T3.6）', () => {
     vi.mocked(backend.fetchQuota).mockResolvedValue(quota(3));
     const { result } = renderHook(() => useQuotaGuard(pagesReader(3)));
     await act(async () => {
-      expect(await result.current.check(new File(['x'], 'a.pdf'))).toBe(true);
+      expect((await result.current.check(new File(['x'], 'a.pdf'))).blocked).toBe(false);
     });
     expect(result.current.result.blocked).toBe(false);
   });
@@ -81,7 +81,7 @@ describe('useQuotaGuard 预检边界（T3.6）', () => {
     vi.mocked(backend.fetchQuota).mockResolvedValue(quota(3));
     const { result } = renderHook(() => useQuotaGuard(pagesReader(4)));
     await act(async () => {
-      expect(await result.current.check(new File(['x'], 'a.pdf'))).toBe(false);
+      expect((await result.current.check(new File(['x'], 'a.pdf'))).blocked).toBe(true);
     });
     expect(result.current.result.blocked).toBe(true);
     expect(result.current.result.pages).toBe(4);
@@ -94,7 +94,7 @@ describe('useQuotaGuard 预检边界（T3.6）', () => {
     vi.mocked(backend.fetchQuota).mockResolvedValue(quota(1));
     const { result } = renderHook(() => useQuotaGuard(pagesReader(9)));
     await act(async () => {
-      expect(await result.current.check(new File(['x'], 'a.pdf'))).toBe(false);
+      expect((await result.current.check(new File(['x'], 'a.pdf'))).blocked).toBe(true);
     });
     act(() => { result.current.reset(); });
     expect(result.current.result).toEqual(QUOTA_GUARD_PASS);

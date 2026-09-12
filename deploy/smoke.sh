@@ -128,7 +128,11 @@ if ! curl -s "$BASE/api/auth/me" | grep -q '"require_login":true'; then
     *127.0.0.1*|*localhost*) check "跨 IP 无 token → 403（防盗链）" 403 "$CODE" ;;
     *) check "公网同 IP 无 token → 200（nginx 覆盖伪造头 + uploader_ip 匹配）" 200 "$CODE" ;;
   esac
-  # 6.6.5 cancel 幂等（无任务 → 404）
+  # 6.6.5 额度去向明细（usage：该 IP 匿名文档清单，file_name 可读）
+  USAGE=$(curl -s -H "X-Real-IP: $RIP2" "$BASE/api/quota/usage")
+  echo "$USAGE" | grep -q '"items"' && ok "GET /api/quota/usage 可用" || bad "/api/quota/usage 异常: $USAGE"
+  echo "$USAGE" | grep -q '"file_name"' && ok "usage 含 file_name（额度去向可追溯）" || bad "usage 缺 file_name: $USAGE"
+  # 6.6.6 cancel 幂等（无任务 → 404）
   CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/translate/$ANON_DOC/cancel")
   check "cancel 无任务 → 404（幂等）" 404 "$CODE"
 else

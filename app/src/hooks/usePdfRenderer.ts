@@ -33,7 +33,8 @@ type PdfjsModule = typeof import('pdfjs-dist');
 
 let pdfjsPromise: Promise<PdfjsModule> | null = null;
 
-async function loadPdfjs(): Promise<PdfjsModule> {
+/** pdf.js 模块单例加载（含 inline worker 配置）——预检/渲染共用，避免无 worker 环境静默失败 */
+export async function loadPdfjs(): Promise<PdfjsModule> {
   if (!pdfjsPromise) {
     pdfjsPromise = import('pdfjs-dist').then((mod) => {
       mod.GlobalWorkerOptions.workerPort = new PdfjsWorker();

@@ -68,3 +68,35 @@
   Toolbar 移除「打开 / 开始翻译」按钮
 - `app/src/App.tsx`：零点击流水线接线、熔断/暂停态、402→QuotaExceededCard
 - `deploy/smoke.sh`：429→402 断言 + 6.6 匿名试用与防盗链段
+
+---
+
+## v2.4.1 补丁：游客额度体验闭环（公网反馈修复）
+
+- **日期**：2026-09-12 | **tag**：`v2.4.1-zero-click-rc2`
+- **问题**（公网实测）：
+  1. 匿名提交超限 PDF 弹出额度卡片，点「仅查看已译部分」→ 界面无任何变化
+  2. 「已使用 3 页」无法追溯——看不到这 3 页翻译了什么
+  3. 额度指示只有数字，无去向明细
+
+### 根因
+1. **预检卡片来源混淆**：QuotaExceededCard 不区分「翻译熔断」（有已译部分）与「解析预检 402」
+  （本文档根本没打开）——后者显示「仅查看已译部分」按钮是欺骗性的，点击仅关卡片；
+2. **回访被二次拦截**：额度耗尽后重发翻译，开流前置 402 与批间熔断**均不豁免已付费批**，
+  「已译部分可继续阅读（续译）」承诺落空；
+3. **额度无去向**：匿名额度按 IP 静默记账，UI 无任何「翻译过什么」的呈现（匿名无历史，
+  会话内 translatedMap 单文档覆盖即丢）；另发现前端本地预检 pdf.js 调用未配置 worker
+  （worker 仅在 usePdfRenderer 中配置）——读页静默失败 → 放行到后端 402，加重混淆。
+
+### 修复
+| 项 | 内容 | 验证 |
+|----|------|------|
+| 后端 | 熔断检查点豁免已付费批（already_charged_batch）+ 开流前置 402 同豁免（has_any_charged_batch）→ 回访/续译已译文档全文缓存秒回（零新增 LLM 调用） | 集成：额度耗尽回访 complete、LLM 调用数不变；未付费新文档仍 402 |
+| 后端 | doc_access 表增 file_name（自动迁移）+ `GET /api/quota/usage`：按 IP 返回匿名上传文档清单 | 集成：同 IP 列表 + IP 隔离 |
+| 前端 | QuotaExceededCard 拆 variant：`limit`（熔断，承诺可读 + 「查看已译部分」）／`precheck`（明示「该文件未开始翻译」+ 剩余/需要页数 + 「换个文件试试」，不承诺已译可读） | 组件测试 4 项 |
+| 前端 | localPdfPages 复用 loadPdfjs（带 inline worker 配置）+ fileBytes FileReader 兜底（jsdom/旧内核缺 File.arrayBuffer）——本地预检不再静默失效 | 集成：本地拦截（11>2）弹 precheck 卡片且零上传请求 |
+| 前端 | sessionDocs（sessionStorage 游客翻译记录）+ GuestDocsPanel（本地记录 ∪ /api/quota/usage 合并去重）+ QuotaIndicator 可点（「剩余 N 页 · 去向 ↗」）——额度去向可追溯、一键回访（回访零配额消耗） | 组件测试 3 项 + App 集成 |
+
+### 门禁
+Rust **323** 全绿 / 前端 **175** 全绿 / clippy --all-targets 0 警告 / release build 通过；
+本地冒烟补 usage 断言。

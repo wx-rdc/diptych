@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
-import { BackendError, parseDoc, translateDoc } from '../services/backend';
+import { BackendError, parseDoc, translateDoc, fetchQuota as backendFetchQuota } from '../services/backend';
 import { fetchMe } from '../services/auth';
 import type { GDocument, TranslateProgress, TranslatedDocument } from '../types';
 
@@ -15,6 +15,16 @@ vi.mock('../services/backend', async (importOriginal) => {
     fetchQuota: vi.fn().mockResolvedValue({ anonymous: false, unlimited: true, remaining: null }),
   };
 });
+
+// mock pdf.js 模块加载（预检读页受控：统一 11 页）
+vi.mock('../hooks/usePdfRenderer', () => ({
+  loadPdfjs: async () => ({
+    // 真实 pdfjs getDocument 同步返回 task（含 .promise），mock 语义保持一致
+    getDocument: () => ({
+      promise: Promise.resolve({ numPages: 11, destroy: async () => {} }),
+    }),
+  }),
+}));
 
 // mock 认证服务：默认匿名
 vi.mock('../services/auth', async (importOriginal) => {
@@ -57,6 +67,7 @@ beforeEach(() => {
   vi.mocked(translateDoc).mockReset();
   vi.mocked(translateDoc).mockImplementation(pendingTranslate);
   vi.mocked(fetchMe).mockResolvedValue({ authenticated: false, username: null });
+  vi.mocked(backendFetchQuota).mockResolvedValue({ anonymous: false, unlimited: true, remaining: null });
 });
 
 afterEach(cleanup);
@@ -172,8 +183,32 @@ describe('v2.4 配额与权限引导', () => {
     fireEvent.change(input, { target: { value: '/tmp/big.pdf' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(screen.getByTestId('quota-exceeded-card')).toBeInTheDocument());
-    expect(screen.getByText(/游客最多可翻译 5 页/)).toBeInTheDocument();
+    expect(screen.getByTestId('quota-exceeded-card').textContent).toContain('需要 10 页');
     expect(screen.getByTestId('quota-login-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('quota-pick-another-btn')).toBeInTheDocument();
+    // precheck 不承诺已译可读
+    expect(screen.queryByTestId('quota-view-translated-btn')).toBeNull();
+  });
+
+  it('本地预检拦截（11 页 > 剩余 2）→ precheck 卡片且不上传', async () => {
+    vi.mocked(backendFetchQuota).mockResolvedValue({
+      anonymous: true, unlimited: false, limit: 5, used: 3, remaining: 2,
+    });
+    vi.mocked(parseDoc).mockResolvedValue(doc);
+    render(<App />);
+    const input = screen.getByTestId('file-path-input');
+    fireEvent.change(input, { target: { value: '/tmp/big.pdf' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByTestId('quota-exceeded-card')).toBeInTheDocument());
+    const cardText = screen.getByTestId('quota-exceeded-card').textContent ?? '';
+    expect(cardText).toContain('该文件未开始翻译');
+    expect(cardText).toContain('需要 11 页');
+    expect(cardText).toContain('剩余 2 页');
+    // 未上传（本地预检拦截在上传之前）
+    expect(parseDoc).not.toHaveBeenCalled();
+    // 「换个文件试试」→ 关卡片并触发 App 层文件选择
+    fireEvent.click(screen.getByTestId('quota-pick-another-btn'));
+    expect(screen.queryByTestId('quota-exceeded-card')).toBeNull();
   });
 
   it('解析遇 401/403（需登录/无权访问）→ 弹出登录对话框并展示文案', async () => {
@@ -205,6 +240,10 @@ describe('v2.4 配额与权限引导', () => {
     // 已译部分保留
     await waitFor(() => expect(screen.getByText('引言')).toBeInTheDocument());
     await waitFor(() => expect(screen.getByTestId('quota-exceeded-card')).toBeInTheDocument());
+    // limit variant：承诺已译可读 + [查看已译部分] 打开游客记录面板
+    fireEvent.click(screen.getByTestId('quota-view-translated-btn'));
+    expect(screen.queryByTestId('quota-exceeded-card')).toBeNull();
+    expect(await screen.findByTestId('guest-docs-panel')).toBeInTheDocument();
   });
 
   it('翻译取消（cancelled）→ 暂停态 + [继续翻译] 按钮', async () => {

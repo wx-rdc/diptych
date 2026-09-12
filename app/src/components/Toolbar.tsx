@@ -30,6 +30,8 @@ interface Props {
   onLogoutClick: () => void;
   /** v2.4：打开「我的文档」历史面板（仅登录态传入） */
   onHistoryClick?: () => void;
+  /** v2.4.1：游客点额度指示器 → 打开翻译记录面板 */
+  onViewUsage?: () => void;
 }
 
 /** MinerU 解析进度文案 */
@@ -85,6 +87,7 @@ export default function Toolbar({
   onLoginClick,
   onLogoutClick,
   onHistoryClick,
+  onViewUsage,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -233,7 +236,7 @@ export default function Toolbar({
           <span className="hidden text-xs text-slate-400 lg:inline" data-testid="anon-hint">
             游客模式 · 额度内免登录
           </span>
-          <QuotaIndicator />
+          <QuotaIndicator onViewUsage={onViewUsage} />
           <button
             onClick={onLoginClick}
             className="rounded border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
