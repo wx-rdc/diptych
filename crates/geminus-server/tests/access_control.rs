@@ -315,7 +315,7 @@ async fn require_login_mode_still_gates_anonymous() {
 #[tokio::test]
 async fn viewing_ir_does_not_consume_quota() {
     use geminus_server::quota::QuotaStore;
-    let quota = QuotaStore::open_in_memory(5).unwrap();
+    let quota = QuotaStore::open_in_memory(5, 1000).unwrap();
     let cache = Arc::new(TranslationCache::open_in_memory().unwrap());
     let app = build_app(
         AppState::new(cache, ApiConfig::new("http://unused", "k", "m"), 3).with_quota(quota),

@@ -145,6 +145,25 @@ pub fn count_pages(path: &Path) -> Result<usize, PdfError> {
     Ok(doc.get_pages().len())
 }
 
+/// 截取前 `keep` 页另存到 `dest`（v2.5 额度内部分处理：云端识别只送额度内页面）。
+/// `keep ≥ 总页数` 时直接复制原文件。返回实际保留页数。
+pub fn crop_pdf(src: &Path, keep: usize, dest: &Path) -> Result<usize, PdfError> {
+    let mut doc = lopdf::Document::load(src).map_err(|e| PdfError::Invalid(e.to_string()))?;
+    let total = doc.get_pages().len();
+    if keep == 0 {
+        return Err(PdfError::Invalid("crop_pdf 需至少保留 1 页".into()));
+    }
+    if keep >= total {
+        std::fs::copy(src, dest)?;
+        return Ok(total);
+    }
+    let drop: Vec<u32> = (keep..total).map(|i| i as u32 + 1).collect();
+    doc.delete_pages(&drop);
+    doc.compress();
+    doc.save(dest)?;
+    Ok(keep)
+}
+
 fn fallback_title(path: &Path) -> String {
     path.file_stem()
         .map(|s| s.to_string_lossy().into_owned())

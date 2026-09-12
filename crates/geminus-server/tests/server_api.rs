@@ -616,6 +616,134 @@ async fn parse_mineru_cached_second_time() {
     assert!(!stages.iter().any(|s| s == "splitting"), "缓存命中不应再拆分上传: {stages:?}");
 }
 
+/// v2.5 部分处理：游客超额 PDF 在 MinerU 上传前被裁剪到剩余额度页数。
+/// mock 上游捕获 PUT 的文件字节 → 断言收到的 PDF 只有 2 页（额度剩余）而非 100 页，
+/// 且 SSE 有 cropped 进度事件——云端识别资源不被超限请求消耗。
+#[tokio::test]
+async fn mineru_guest_overquota_pdf_cropped_before_upload() {
+    use axum::routing::{get, put};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Mutex;
+
+    let uploaded: Arc<Mutex<Option<Vec<u8>>>> = Arc::new(Mutex::new(None));
+    // 回显片段名：extract-result 的 file_name 必须与上传的 chunk 名一致（uuid 随机生成）
+    let chunk_name: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    let zip_bytes = {
+        use std::io::Write as _;
+        let buf = std::io::Cursor::new(Vec::new());
+        let mut w = zip::ZipWriter::new(buf);
+        let opts: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+        let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test/fixtures/mineru/simple");
+        w.start_file("content_list.json", opts).unwrap();
+        w.write_all(std::fs::read(base.join("content_list.json")).unwrap().as_slice()).unwrap();
+        w.start_file("layout.json", opts).unwrap();
+        w.write_all(std::fs::read(base.join("layout.json")).unwrap().as_slice()).unwrap();
+        w.finish().unwrap().into_inner()
+    };
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base_addr = format!("http://{}", listener.local_addr().unwrap());
+    let oss_url = format!("{base_addr}/oss.pdf");
+    let zip_url = format!("{base_addr}/result.zip");
+    let polled = Arc::new(AtomicBool::new(false));
+    let up = uploaded.clone();
+    let cname = chunk_name.clone();
+    let router = Router::new()
+        .route(
+            "/api/v4/file-urls/batch",
+            route_post(move |body: axum::Json<serde_json::Value>| {
+                let oss_url = oss_url.clone();
+                let cname = cname.clone();
+                async move {
+                    *cname.lock().unwrap() = body.0["files"][0]["name"]
+                        .as_str()
+                        .map(|s| s.to_string());
+                    axum::Json(serde_json::json!({"code": 0, "data": {"batch_id": "b1",
+                        "file_urls": [oss_url]}}))
+                }
+            }),
+        )
+        .route(
+            "/oss.pdf",
+            put(move |body: axum::body::Bytes| {
+                let up = up.clone();
+                async move {
+                    *up.lock().unwrap() = Some(body.to_vec());
+                    "ok"
+                }
+            }),
+        )
+        .route(
+            "/api/v4/extract-results/batch/:batch_id",
+            get(move || {
+                let p = polled.clone();
+                let zip_url = zip_url.clone();
+                let cname = chunk_name.clone();
+                async move {
+                    let name = cname
+                        .lock()
+                        .unwrap()
+                        .clone()
+                        .unwrap_or_else(|| "large_chunk_00.pdf".into());
+                    let done = p.swap(true, Ordering::SeqCst);
+                    if done {
+                        axum::Json(serde_json::json!({"code": 0, "data": {"extract_result": [
+                            {"file_name": name, "state": "done",
+                             "full_zip_url": zip_url}]}}))
+                    } else {
+                        axum::Json(serde_json::json!({"code": 0, "data": {"extract_result": [
+                            {"file_name": name, "state": "running",
+                             "extract_progress": {"extracted_pages": 0, "total_pages": 1}}]}}))
+                    }
+                }
+            }),
+        )
+        .route(
+            "/result.zip",
+            get(move || {
+                let z = zip_bytes.clone();
+                async move { ([(axum::http::header::CONTENT_TYPE, "application/zip")], z) }
+            }),
+        );
+    tokio::spawn(async move { axum::serve(listener, router).await.unwrap(); });
+    let client = geminus_core::mineru::MineruClient::new(format!("{base_addr}/api/v4"), "tok".into());
+
+    // 游客限额 2，上传 100 页 large.pdf → 裁剪到 2 页再送 MinerU
+    let quota = geminus_server::quota::QuotaStore::open_in_memory(2, 1000).unwrap();
+    let cache = Arc::new(TranslationCache::open_in_memory().unwrap());
+    let state = AppState::new(cache, ApiConfig::new("http://unused", "k", "m"), 3)
+        .with_mineru(Some(client))
+        .with_quota(quota);
+    let app = build_app(state);
+    let resp = app
+        .oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/parse")
+                .header("content-type", "application/json")
+                .header("x-real-ip", "203.0.113.88")
+                .body(axum::body::Body::from(
+                    serde_json::json!({"file_path": pdf_fixture("large.pdf"), "parser": "mineru"}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let events = collect_sse_events(resp).await;
+    assert!(events.iter().any(|(n, _)| n == "done"), "部分处理解析成功: {events:?}");
+    assert!(
+        events.iter().any(|(n, d)| n == "progress" && d.contains("cropped")),
+        "裁剪有进度事件: {events:?}"
+    );
+    // MinerU 收到的 PDF 只有 2 页（= 剩余额度），不是 100 页
+    let bytes = uploaded.lock().unwrap().clone().expect("mock 应收到上传");
+    let tmp = tempfile::tempdir().unwrap();
+    let pdf_path = tmp.path().join("received.pdf");
+    std::fs::write(&pdf_path, bytes).unwrap();
+    assert_eq!(geminus_core::pdf::count_pages(&pdf_path).unwrap(), 2, "云端只收到额度内页数");
+}
+
 #[tokio::test]
 async fn coverage_endpoint_reports_after_mineru_parse() {
     // v2.2 T1：MinerU 解析 → raw 持久化 → /api/debug/coverage 返回三层度量
@@ -1048,17 +1176,21 @@ async fn login_bruteforce_throttled() {
 }
 
 #[tokio::test]
-async fn anon_quota_charges_pages_and_blocks() {
-    use geminus_server::quota::QuotaStore;
-    // v2.4 三段式：解析仅预检不扣（保护 MinerU）；实扣在翻译循环逐批进行。
-    // 限额 1：simple.pdf（1 页）翻译后满额 → 后续解析预检 402。
-    let quota = QuotaStore::open_in_memory(1).unwrap();
+async fn anon_quota_partial_processing_and_exhausted_402() {
+    use geminus_server::quota::{QuotaActor, QuotaStore};
+    // v2.5 部分处理：超页文件不再整体 402——剩余额度内放行（翻译按批截断）；
+    // 仅剩余 0 页（无可处理内容）时 402，结构化字段带 reset_at（24h 滚动恢复）。
+    let quota = QuotaStore::open_in_memory(5, 1000).unwrap();
+    // 该 IP 额度已用满（模拟翻译扣减：直接预扣 5/5）
+    quota
+        .commit_chunk(&QuotaActor::Guest("203.0.113.1".into()), "pre-charged", 0, 5)
+        .unwrap();
     let cache = Arc::new(TranslationCache::open_in_memory().unwrap());
     let app = build_app(
         AppState::new(cache, ApiConfig::new("http://unused", "k", "m"), 3).with_quota(quota),
     );
 
-    // 匿名（X-Real-IP）解析 1 页 simple.pdf → 200（预检通过，不扣）
+    // 额度耗尽 IP：1 页 simple.pdf 也 402（无任何可处理内容）
     let resp = post_json(
         &app,
         "/api/parse",
@@ -1066,51 +1198,50 @@ async fn anon_quota_charges_pages_and_blocks() {
         &[("x-real-ip", "203.0.113.1")],
     )
     .await;
-    assert_eq!(resp.status(), 200);
-    let doc: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    let _doc_id = doc["id"].as_str().unwrap();
+    assert_eq!(resp.status(), 402, "额度耗尽（剩余 0）才整体拦截");
+    let v: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
+    assert_eq!(v["limit"].as_i64(), Some(5), "结构化字段 limit");
+    assert_eq!(v["used"].as_i64(), Some(5), "结构化字段 used");
+    assert!(v["reset_at"].as_i64().is_some(), "结构化字段 reset_at（24h 滚动恢复）");
 
-    // 同 IP 再次解析同文档 → 仍 200（解析始终免费，只受页数预检约束）
-    let resp = post_json(
-        &app,
-        "/api/parse",
-        serde_json::json!({ "file_path": pdf_fixture("simple.pdf").to_string_lossy(), "parser": "builtin" }),
-        &[("x-real-ip", "203.0.113.1")],
-    )
-    .await;
-    assert_eq!(resp.status(), 200, "解析不实扣，重复解析不受已用额度影响");
-    drop(body_string(resp).await);
-
-    // 已用满 0 页时解析 100 页 large.pdf → 预检 402（不消耗 MinerU/解析资源）
+    // 新 IP：100 页 large.pdf 也放行（v2.4 是 402；v2.5 部分处理，只译剩余额度内页数）
     let resp = post_json(
         &app,
         "/api/parse",
         serde_json::json!({ "file_path": pdf_fixture("large.pdf").to_string_lossy(), "parser": "builtin" }),
-        &[("x-real-ip", "203.0.113.1")],
-    )
-    .await;
-    assert_eq!(resp.status(), 402, "超出剩余额度的解析预检 402");
-    let v: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    assert_eq!(v["limit"].as_i64(), Some(1), "结构化字段 limit");
-    assert_eq!(v["required"].as_i64(), Some(100), "结构化字段 required");
-
-    // 其他 IP 不受影响（fresh 额度解析 1 页 simple.pdf）；登录用户不受限（见 logged_in_user_unlimited）
-    let resp = post_json(
-        &app,
-        "/api/parse",
-        serde_json::json!({ "file_path": pdf_fixture("simple.pdf").to_string_lossy(), "parser": "builtin" }),
         &[("x-real-ip", "203.0.113.2")],
     )
     .await;
+    assert_eq!(resp.status(), 200, "超页文件放行——额度内部分处理");
+    drop(body_string(resp).await);
+
+    // /api/quota：统一 finite 口径（游客 5 页/24h + reset_at）
+    let resp = app
+        .clone()
+        .oneshot(
+            axum::http::Request::builder()
+                .uri("/api/quota")
+                .header("x-real-ip", "203.0.113.2")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(resp.status(), 200);
-    let doc: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    let _ = doc["id"].as_str().unwrap(); // 可继续翻译（实扣路径见 translate_control 集成测试）
+    let v: serde_json::Value =
+        serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(v["anonymous"].as_bool(), Some(true));
+    assert_eq!(v["unlimited"].as_bool(), Some(false));
+    assert_eq!(v["limit"].as_i64(), Some(5));
+    assert_eq!(v["remaining"].as_i64(), Some(5), "解析本身不扣费");
+    assert!(v["reset_at"].is_null(), "未使用则无恢复时间点");
 }
 
 #[tokio::test]
-async fn logged_in_user_unlimited() {
+async fn logged_in_user_daily_quota_1000() {
     use geminus_server::quota::QuotaStore;
-    let quota = QuotaStore::open_in_memory(2).unwrap();
+    // v2.5：登录用户不再「不限量」，统一 1000 页/24h（测试环境 guest 限额 5 不影响登录态）
+    let quota = QuotaStore::open_in_memory(5, 1000).unwrap();
     let dir = tempfile::tempdir().unwrap();
     let users_json = dir.path().join("users.json");
     std::fs::write(
@@ -1153,7 +1284,7 @@ async fn logged_in_user_unlimited() {
         .unwrap()
         .to_string();
 
-    // 额度只有 2 页，但登录用户连解析 3+2+100 页都放行
+    // 游客限额 5 不约束登录主体：连解析 3+2+100 页都放行（1000 页/24h 内）
     for f in ["simple.pdf", "headings.pdf", "large.pdf"] {
         let resp = post_json(
             &app,
@@ -1162,15 +1293,34 @@ async fn logged_in_user_unlimited() {
             &[("x-real-ip", "203.0.113.5"), ("cookie", &cookie)],
         )
         .await;
-        assert_eq!(resp.status(), 200, "登录用户 {f} 不应受限");
+        assert_eq!(resp.status(), 200, "登录用户 {f} 在 1000 页额度内");
         drop(body_string(resp).await);
     }
+
+    // /api/quota：登录态 finite 1000 页口径（不再是 unlimited）
+    let resp = app
+        .oneshot(
+            axum::http::Request::builder()
+                .uri("/api/quota")
+                .header("x-real-ip", "203.0.113.5")
+                .header("cookie", &cookie)
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(v["anonymous"].as_bool(), Some(false));
+    assert_eq!(v["unlimited"].as_bool(), Some(false), "v2.5：登录用户纳入统一额度");
+    assert_eq!(v["limit"].as_i64(), Some(1000));
+    assert_eq!(v["remaining"].as_i64(), Some(1000));
 }
 
 #[tokio::test]
 async fn anon_paragraph_retranslate_gated() {
     use geminus_server::quota::QuotaStore;
-    let quota = QuotaStore::open_in_memory(5).unwrap();
+    let quota = QuotaStore::open_in_memory(5, 1000).unwrap();
     let cache = Arc::new(TranslationCache::open_in_memory().unwrap());
     let app = build_app(
         AppState::new(cache, ApiConfig::new("http://unused", "k", "m"), 3).with_quota(quota),
@@ -1222,17 +1372,21 @@ fn multipart_body(boundary: &str, filename: &str, bytes: &[u8]) -> Vec<u8> {
 }
 
 #[tokio::test]
-async fn multipart_upload_anon_quota_precheck() {
-    // 公网语义（v2.4）：匿名（X-Real-IP）上传超限大文件 → 预检 402；小文件 → 200
-    use geminus_server::quota::QuotaStore;
-    let quota = QuotaStore::open_in_memory(5).unwrap();
+async fn multipart_upload_partial_processing_and_exhausted_402() {
+    // v2.5 公网语义：匿名（X-Real-IP）上传超限大文件 → 放行（额度内部分处理）；
+    // 额度耗尽（剩余 0）→ 402（无任何可处理内容）
+    use geminus_server::quota::{QuotaActor, QuotaStore};
+    let quota = QuotaStore::open_in_memory(5, 1000).unwrap();
+    quota
+        .commit_chunk(&QuotaActor::Guest("203.0.113.56".into()), "pre-charged", 0, 5)
+        .unwrap();
     let cache = Arc::new(TranslationCache::open_in_memory().unwrap());
     let app = build_app(
         AppState::new(cache, ApiConfig::new("http://unused", "k", "m"), 3).with_quota(quota),
     );
     let boundary = "----geminus-test-boundary";
 
-    // 100 页 large.pdf 匿名上传 → 402（预检发生在解析与 MinerU 调用之前）
+    // 100 页 large.pdf 匿名上传（fresh 额度）→ 200：部分处理，翻译只译剩余额度内页数
     let body = multipart_body(
         boundary,
         "large.pdf",
@@ -1251,12 +1405,10 @@ async fn multipart_upload_anon_quota_precheck() {
         )
         .await
         .unwrap();
-    assert_eq!(resp.status(), 402, "匿名上传超限 PDF 应预检 402");
-    let v: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
-    assert!(v["error"].as_str().unwrap().contains("登录"), "402 文案含登录引导");
-    assert_eq!(v["required"].as_i64(), Some(100), "结构化字段 required");
+    assert_eq!(resp.status(), 200, "v2.5：超页上传放行（额度内部分处理）");
+    drop(body_string(resp).await);
 
-    // 1 页 simple.pdf 匿名上传 → 200
+    // 1 页 simple.pdf 匿名上传（fresh 额度）→ 200
     let body = multipart_body(
         boundary,
         "simple.pdf",
@@ -1275,9 +1427,10 @@ async fn multipart_upload_anon_quota_precheck() {
         )
         .await
         .unwrap();
-    assert_eq!(resp.status(), 200, "1 页匿名上传应放行");
+    assert_eq!(resp.status(), 200, "额度内上传放行");
+    drop(body_string(resp).await);
 
-    // 同 IP 再次上传同一文件（同哈希）→ 幂等 200，不重复扣页
+    // 额度耗尽 IP：1 页 simple.pdf → 402（登录引导 + 24h 恢复）
     let body = multipart_body(
         boundary,
         "simple.pdf",
@@ -1289,13 +1442,16 @@ async fn multipart_upload_anon_quota_precheck() {
                 .method("POST")
                 .uri("/api/parse")
                 .header("content-type", format!("multipart/form-data; boundary={boundary}"))
-                .header("x-real-ip", "203.0.113.55")
+                .header("x-real-ip", "203.0.113.56")
                 .body(axum::body::Body::from(body))
                 .unwrap(),
         )
         .await
         .unwrap();
-    assert_eq!(resp.status(), 200, "同内容重复上传不应叠加计费");
+    assert_eq!(resp.status(), 402, "额度耗尽（剩余 0）→ 402");
+    let v: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
+    assert!(v["error"].as_str().unwrap().contains("登录"), "402 文案含登录引导");
+    assert!(v["reset_at"].as_i64().is_some(), "402 带 reset_at（24h 滚动恢复）");
 }
 
 #[tokio::test]

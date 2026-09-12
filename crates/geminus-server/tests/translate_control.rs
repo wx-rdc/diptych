@@ -143,7 +143,7 @@ async fn parse_pdf(app: &App, name: &str, headers: &[(&str, &str)]) -> String {
 #[tokio::test]
 async fn anon_translate_limit_reached_after_quota() {
     let (llm, _count) = spawn_counting_mock_llm().await;
-    let app = make_app(&llm, QuotaStore::open_in_memory(2).unwrap());
+    let app = make_app(&llm, QuotaStore::open_in_memory(2, 1000).unwrap());
     let ip: &[(&str, &str)] = &[("x-real-ip", "203.0.113.50")];
     let doc_a = parse_pdf(&app, "simple.pdf", ip).await; // 真实 1 页
     let doc_b = parse_pdf(&app, "two_column.pdf", ip).await; // 真实 2 页（预检过）；估算 2 批
@@ -163,16 +163,36 @@ async fn anon_translate_limit_reached_after_quota() {
     assert_eq!(v["used"].as_i64(), Some(2), "恰好译满 2 页后熔断");
     assert_eq!(v["limit"].as_i64(), Some(2));
     assert_eq!(v["required"].as_i64(), Some(1));
+    assert_eq!(v["translated_pages"].as_i64(), Some(1), "熔断事件带已译页数（部分处理成果）");
     assert!(events.iter().all(|e| e.event != "complete"), "熔断后无 complete");
     let progress_n = events.iter().filter(|e| e.event == "progress").count();
     assert!(progress_n >= 1, "已译部分 progress 保留（实际 {progress_n}）");
+}
+
+/// v2.5 单文档内部分处理：限额 1 + 2 页文档 → 只译第 1 页即熔断（已译 1 页保留可读）。
+#[tokio::test]
+async fn partial_translate_capped_within_single_doc() {
+    let (llm, _count) = spawn_counting_mock_llm().await;
+    let app = make_app(&llm, QuotaStore::open_in_memory(1, 1000).unwrap());
+    let ip: &[(&str, &str)] = &[("x-real-ip", "203.0.113.51")];
+    let doc = parse_pdf(&app, "two_column.pdf", ip).await; // 2 页
+
+    let resp = post_translate(&app, serde_json::json!({ "doc_id": doc }), ip).await;
+    assert_eq!(resp.status(), 200);
+    let events = read_sse_while(resp, |ev| ev.event != "limit_reached").await;
+    let limit_ev = events.iter().find(|e| e.event == "limit_reached").expect("额度内页数译完后熔断");
+    let v: serde_json::Value = serde_json::from_str(&limit_ev.data).unwrap();
+    assert_eq!(v["translated_pages"].as_i64(), Some(1), "只译了额度内的 1 页");
+    assert_eq!(v["used"].as_i64(), Some(1));
+    assert!(events.iter().any(|e| e.event == "progress"), "已译页内容可读（progress 保留）");
+    assert!(events.iter().all(|e| e.event != "complete"), "未全册完成");
 }
 
 /// T5 取消：翻译进行中 POST cancel → cancelled 事件（translated_pages ≥ 0）+ registry 清空
 #[tokio::test]
 async fn cancel_midway_emits_cancelled_and_clears_registry() {
     let (llm, _count) = spawn_counting_mock_llm().await;
-    let app = make_app(&llm, QuotaStore::open_in_memory(5).unwrap());
+    let app = make_app(&llm, QuotaStore::open_in_memory(5, 1000).unwrap());
     // 本地直连（无代理头）：无配额干扰，纯控制流
     let doc_id = parse_pdf(&app, "large.pdf", &[]).await;
 
@@ -229,7 +249,7 @@ async fn cancel_midway_emits_cancelled_and_clears_registry() {
 #[tokio::test]
 async fn sse_disconnect_auto_cancels() {
     let (llm, _count) = spawn_counting_mock_llm().await;
-    let app = make_app(&llm, QuotaStore::open_in_memory(5).unwrap());
+    let app = make_app(&llm, QuotaStore::open_in_memory(5, 1000).unwrap());
     let doc_id = parse_pdf(&app, "large.pdf", &[]).await;
 
     let resp = post_translate(&app, serde_json::json!({ "doc_id": doc_id }), &[]).await;
@@ -256,7 +276,7 @@ async fn sse_disconnect_auto_cancels() {
 #[tokio::test]
 async fn resume_after_cancel_reuses_cache() {
     let (llm, count) = spawn_counting_mock_llm().await;
-    let app = make_app(&llm, QuotaStore::open_in_memory(5).unwrap());
+    let app = make_app(&llm, QuotaStore::open_in_memory(5, 1000).unwrap());
     let doc_id = parse_pdf(&app, "large.pdf", &[]).await;
 
     // 第一次：读到首个真实翻译完成（done）的块后断流（模拟用户中途停止）
@@ -314,7 +334,7 @@ async fn resume_after_cancel_reuses_cache() {
 async fn cancel_endpoint_gated_by_access() {
     let (llm, _count) = spawn_counting_mock_llm().await;
     // 大限额：本测试只验证 cancel 端点权限，不做配额路径
-    let app = make_app(&llm, QuotaStore::open_in_memory(1000).unwrap());
+    let app = make_app(&llm, QuotaStore::open_in_memory(1000, 1000).unwrap());
     let ip: &[(&str, &str)] = &[("x-real-ip", "203.0.113.60")];
     let doc_id = parse_pdf(&app, "large.pdf", ip).await;
 
@@ -339,7 +359,7 @@ async fn cancel_endpoint_gated_by_access() {
 #[tokio::test]
 async fn revisit_after_quota_exhausted_replays_from_cache() {
     let (llm, count) = spawn_counting_mock_llm().await;
-    let app = make_app(&llm, QuotaStore::open_in_memory(2).unwrap());
+    let app = make_app(&llm, QuotaStore::open_in_memory(2, 1000).unwrap());
     let ip: &[(&str, &str)] = &[("x-real-ip", "203.0.113.70")];
     let doc_id = parse_pdf(&app, "two_column.pdf", ip).await; // 2 页（2 批）
 

@@ -215,6 +215,8 @@ export default function Toolbar({
           >
             👤 {username}
           </span>
+          {/* v2.5：登录用户同样展示每日额度（1000 页/24h） */}
+          <QuotaIndicator />
           <button
             onClick={onHistoryClick}
             className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700"

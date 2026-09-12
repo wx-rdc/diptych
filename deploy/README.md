@@ -111,9 +111,12 @@ sudo certbot renew --dry-run
 
 1. **预设用户登录**：`POST /api/auth/login`（PBKDF2-SHA256 600k 迭代），HttpOnly 会话 Cookie；
    无自助注册；登录接口 10 分钟滑动窗口限速（每用户名 5 次 / 每 IP 20 次失败）。
-2. **匿名限流**：未登录按 IP 累计「查看 + 翻译」5 页（`GEMINUS_ANON_PAGE_LIMIT`），SQLite 持久；
-   同一文件（内容哈希）只计一次；PDF 在调用 MinerU 前用 lopdf 页数预检拦截；
-   单段重译仅限已计费文档且每小时 ≤30 次。登录用户不受限。
+2. **统一页数额度（v2.5）**：游客按 IP 5 页 / 24 小时（`GEMINUS_ANON_PAGE_LIMIT`），
+   登录用户按用户名 1000 页 / 24 小时（`GEMINUS_USER_PAGE_LIMIT`），SQLite 持久；
+   24 小时滚动窗口自动重置；识别+翻译 1 页 = 1 个计数单位（同 (主体, 文件哈希, 批) 幂等，
+   断点续传/缓存秒回不重复扣）。超页文件不整体拒绝——只处理剩余额度内页数
+   （MinerU 在线识别前 PDF 预裁剪到额度内页数，不浪费云端资源；翻译循环逐批熔断，
+   剩余 0 页才 402）。单段重译仅限已计费文档且每小时 ≤30 次。本地直连（无代理头）不计额。
 3. **本地路径门控**：JSON `file_path` 分支默认 403（`GEMINUS_ALLOW_LOCAL_PATH=0`），公网仅
    multipart 上传（扩展名白名单 + magic bytes + 200MB 上限 + 服务端生成存储名）。
 4. **IP 识别**：nginx 覆盖式注入 `X-Real-IP: $remote_addr`；后端仅监听 127.0.0.1。
@@ -138,9 +141,12 @@ ssh user@your-server '
 # releases/ 保留最近 3 版，超出清理最旧
 ```
 
-## 匿名额度重置（如需）
+## 额度手动重置（如需）
 
 ```sql
 -- ssh user@your-server: sudo -u geminus sqlite3 /opt/geminus/data/auth_quota.db
-DELETE FROM anon_page_usage;  -- 或按 IP：WHERE ip = 'x.x.x.x'
+-- v2.5 起额度 24 小时滚动窗口自动重置；手动清零仅用于运维豁免
+DELETE FROM page_usage;                             -- 全部主体
+DELETE FROM page_usage WHERE actor = 'ip:x.x.x.x';  -- 指定游客 IP
+DELETE FROM page_usage WHERE actor = 'user:alice';  -- 指定登录用户
 ```

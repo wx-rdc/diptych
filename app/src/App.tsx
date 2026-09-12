@@ -22,7 +22,6 @@ import GuestDocsPanel from './components/GuestDocsPanel';
 import { recordGuestDoc } from './services/guestDocs';
 import type { ParagraphToolbarInteractive } from './components/BlockRenderer';
 import { useReadingFontSize } from './hooks/useReadingFontSize';
-import { useQuotaGuard } from './hooks/useQuotaGuard';
 import { useAutoPipeline } from './hooks/useAutoPipeline';
 import { paragraphPlainText } from './types';
 
@@ -41,12 +40,10 @@ export default function App() {
   const [fallbackIds, setFallbackIds] = useState<Set<string>>(new Set());
   // v2.1：翻译完成态
   const [lastDone, setLastDone] = useState(false);
-  // v2.4 T3/T6：额度引导卡片（variant 区分来源——limit=熔断有已译部分；precheck=预检拦截未打开）
-  const [limitInfo, setLimitInfo] = useState<{ quota: QuotaInfo; variant: 'limit' | 'precheck' } | null>(null);
+  // v2.5：额度引导卡片（部分处理熔断 / 额度耗尽 402）
+  const [limitInfo, setLimitInfo] = useState<QuotaInfo | null>(null);
   // v2.4.1：游客翻译记录面板
   const [guestDocsOpen, setGuestDocsOpen] = useState(false);
-  // v2.4.1：App 层共享文件选择入口（「换个文件试试」按钮复用）
-  const pickInputRef = useRef<HTMLInputElement>(null);
   // v2.4 T3/T5：暂停态（用户停止 / 断开）→ [继续翻译]
   const [paused, setPaused] = useState(false);
   // v2.4 T3：自动翻译是否已对该文档执行过（仅首次自动，防循环）
@@ -66,8 +63,7 @@ export default function App() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginHint, setLoginHint] = useState<string | null>(null);
 
-  // v2.4 T3：零点击流水线 + 本地配额预检
-  const quotaGuard = useQuotaGuard();
+  // v2.5：零点击流水线（本地配额预检已移除——超页文件由服务端部分处理）
   const pipeline = useAutoPipeline();
 
   useEffect(() => {
@@ -101,9 +97,9 @@ export default function App() {
 
   const reportError = useCallback(
     (e: unknown) => {
-      // v2.4 T3.5：解析预检 402 → QuotaExceededCard（precheck：本次文档未打开）
+      // v2.5：额度耗尽 402（剩余 0，无已译内容）→ 额度卡片引导登录/等待恢复
       if (e instanceof BackendError && e.quota) {
-        setLimitInfo({ quota: e.quota, variant: 'precheck' });
+        setLimitInfo(e.quota);
         return;
       }
       const message = e instanceof Error ? e.message : String(e);
@@ -195,8 +191,8 @@ export default function App() {
         setLastDone(true);
       } catch (e) {
         if (e instanceof QuotaLimitError) {
-          // 熔断：已译部分（translatedMap）保留可读，QuotaExceededCard（limit）引导
-          setLimitInfo({ quota: e.quota, variant: 'limit' });
+          // 熔断：已译部分（translatedMap）保留可读，额度卡片引导（含已译页数）
+          setLimitInfo(e.quota);
         } else if (e instanceof TranslateCancelledError) {
           // 暂停态：[继续翻译] 走缓存秒回 + 增量续译
           setPaused(true);
@@ -210,29 +206,15 @@ export default function App() {
     [sourceLang, targetLang, filePath, reportError],
   );
 
-  // v2.4 T3 零点击：选择文件 → 本地预检 → 自动解析 → 自动翻译
+  // v2.5 零点击：选择文件 → 自动解析 → 自动翻译（超页文件由服务端部分处理）
   const handlePickFile = useCallback(
     async (file: File) => {
       setFilePath(file.name);
       setError(null);
       pipeline.reset();
       try {
-        const guard = await quotaGuard.check(file);
-        const d = await pipeline.runUpload(file, 'auto', async () => !guard.blocked);
-        if (!d) {
-          // 预检拦截：不上传 → 结构化卡片（precheck；用 check 返回值避免闭包旧态）
-          if (guard.blocked && guard.limit != null) {
-            setLimitInfo({
-              variant: 'precheck',
-              quota: {
-                limit: guard.limit,
-                used: guard.used ?? 0,
-                required: guard.pages ?? 0,
-              },
-            });
-          }
-          return;
-        }
+        const d = await pipeline.runUpload(file, 'auto');
+        if (!d) return;
         applyDoc(d, file.name);
         if (autoTranslatedRef.current !== d.id) {
           autoTranslatedRef.current = d.id;
@@ -243,7 +225,7 @@ export default function App() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pipeline, quotaGuard, applyDoc, runTranslate, reportError],
+    [pipeline, applyDoc, runTranslate, reportError],
   );
 
   // 本地路径开发分支（Enter 触发同款零点击流水线）
@@ -253,17 +235,8 @@ export default function App() {
     setError(null);
     pipeline.reset();
     try {
-      const guard = await quotaGuard.check(new File([], path));
-      const d = await pipeline.runPath(path, 'auto', async () => !guard.blocked);
-      if (!d) {
-        if (guard.blocked && guard.limit != null) {
-          setLimitInfo({
-            variant: 'precheck',
-            quota: { limit: guard.limit, used: guard.used ?? 0, required: guard.pages ?? 0 },
-          });
-        }
-        return;
-      }
+      const d = await pipeline.runPath(path, 'auto');
+      if (!d) return;
       applyDoc(d, path);
       if (autoTranslatedRef.current !== d.id) {
         autoTranslatedRef.current = d.id;
@@ -273,7 +246,7 @@ export default function App() {
       reportError(e);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filePath, pipeline, quotaGuard, applyDoc, runTranslate, reportError]);
+  }, [filePath, pipeline, applyDoc, runTranslate, reportError]);
 
   // v2.4.1：游客记录回访——fetchDocument（token 防盗链）+ 翻译（已付费批缓存秒回零消耗）
   const openGuestDoc = useCallback(
@@ -461,26 +434,17 @@ export default function App() {
         />
       ) : null}
 
-      {/* v2.4.1：额度引导卡片（limit=熔断有已译部分；precheck=预检拦截未打开） */}
+      {/* v2.5：额度引导卡片（部分处理熔断有已译部分；额度耗尽 402 无） */}
       {limitInfo ? (
         <QuotaExceededCard
-          quota={limitInfo.quota}
-          variant={limitInfo.variant}
-          onLogin={() => openLogin('登录后不限量翻译；登录成功后可继续翻译本文档')}
+          quota={limitInfo}
+          onLogin={() => openLogin('登录后每天可翻译 1000 页；登录成功后可继续翻译本文档剩余内容')}
           onViewTranslated={
-            limitInfo.variant === 'limit'
+            (limitInfo.translated_pages ?? 0) > 0
               ? () => {
                   // 已译部分就在当前右栏（熔断不清空内容）；面板提供跨文档回访
                   setLimitInfo(null);
                   setGuestDocsOpen(true);
-                }
-              : undefined
-          }
-          onPickAnother={
-            limitInfo.variant === 'precheck'
-              ? () => {
-                  setLimitInfo(null);
-                  pickInputRef.current?.click();
                 }
               : undefined
           }
@@ -492,20 +456,6 @@ export default function App() {
       {guestDocsOpen ? (
         <GuestDocsPanel onOpen={openGuestDoc} onClose={() => setGuestDocsOpen(false)} />
       ) : null}
-
-      {/* v2.4.1：App 层共享文件选择入口（「换个文件试试」触发；与工具栏上传同一回调） */}
-      <input
-        type="file"
-        accept=".docx,.pdf"
-        ref={pickInputRef}
-        className="hidden"
-        data-testid="app-pick-input"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void handlePickFile(f);
-          e.target.value = '';
-        }}
-      />
 
       {historyOpen ? (
         <HistoryPanel

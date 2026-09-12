@@ -16,33 +16,19 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('useAutoPipeline 状态机流转（T3.6）', () => {
-  it('预检放行：prechecking → parsing（progress 落状态）→ parsed 并返回文档', async () => {
-    vi.mocked(backend.parseDoc).mockImplementation(
-      async (_p, _parser, onProgress) => {
-        onProgress?.(progress('parsing'));
-        return doc();
-      },
-    );
+describe('useAutoPipeline 状态机流转（v2.5 无本地预检）', () => {
+  it('直接解析：parsing（progress 落状态）→ parsed 并返回文档', async () => {
+    vi.mocked(backend.parseDoc).mockImplementation(async (_p, _parser, onProgress) => {
+      onProgress?.(progress('parsing'));
+      return doc();
+    });
     const { result } = renderHook(() => useAutoPipeline());
     let out: GDocument | null = null;
     await act(async () => {
-      out = await result.current.runPath('/tmp/x.pdf', 'auto', async () => true);
+      out = await result.current.runPath('/tmp/x.pdf', 'auto');
     });
     expect((out as GDocument | null)?.id).toBe('d1');
     expect(result.current.state.stage).toBe('parsed');
-  });
-
-  it('预检拦截：blocked、不上传（parseDoc 未被调用）、返回 null', async () => {
-    const { result } = renderHook(() => useAutoPipeline());
-    let out: GDocument | null = 'sentinel' as unknown as GDocument;
-    await act(async () => {
-      out = await result.current.runPath('/tmp/x.pdf', 'auto', async () => false);
-    });
-    expect(out).toBeNull();
-    expect(result.current.state.stage).toBe('blocked');
-    expect(result.current.state.blockMessage).toContain('额度');
-    expect(backend.parseDoc).not.toHaveBeenCalled();
   });
 
   it('解析失败：抛出原始错误并回到 idle', async () => {
@@ -50,7 +36,7 @@ describe('useAutoPipeline 状态机流转（T3.6）', () => {
     const { result } = renderHook(() => useAutoPipeline());
     await expect(
       act(async () => {
-        await result.current.runPath('/tmp/x.pdf', 'auto', async () => true);
+        await result.current.runPath('/tmp/x.pdf', 'auto');
       }),
     ).rejects.toThrow('上传失败');
     expect(result.current.state).toEqual(PIPELINE_INITIAL);
@@ -61,7 +47,7 @@ describe('useAutoPipeline 状态机流转（T3.6）', () => {
     const { result } = renderHook(() => useAutoPipeline());
     let out: GDocument | null = null;
     await act(async () => {
-      out = await result.current.runUpload(new File(['x'], 'a.pdf'), 'auto', async () => true);
+      out = await result.current.runUpload(new File(['x'], 'a.pdf'), 'auto');
     });
     expect((out as GDocument | null)?.id).toBe('d2');
     expect(result.current.state.stage).toBe('parsed');
@@ -78,7 +64,7 @@ describe('useAutoPipeline 状态机流转（T3.6）', () => {
     );
     const { result } = renderHook(() => useAutoPipeline());
     const first = act(async () => {
-      const p = result.current.runPath('/tmp/slow.pdf', 'auto', async () => true);
+      const p = result.current.runPath('/tmp/slow.pdf', 'auto');
       // 启动后立刻 reset（模拟用户切换文档）
       act(() => { result.current.reset(); });
       release?.();

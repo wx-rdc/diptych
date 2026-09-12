@@ -100,3 +100,45 @@
 ### 门禁
 Rust **323** 全绿 / 前端 **175** 全绿 / clippy --all-targets 0 警告 / release build 通过；
 本地冒烟补 usage 断言。
+
+---
+
+## v2.5：统一额度重构——24h 滚动窗口 · 游客/登录同口径 · 额度内部分处理
+
+- **日期**：2026-09-12
+- **问题**（用户反馈）：
+  1. 免费额度不会在 24 小时后重置（`used_pages` 全历史累加，永不恢复）；
+  2. 提交 11 页 PDF 提示「需要 22 页」额度——计量口径让用户认为识别与翻译被分开计算；
+  3. 超页文件被整体拒绝（前端本地预检拦截上传 + 后端解析预检 402），无法在额度内试用；
+  4. 后端超发处理：翻译循环逐批熔断虽止损 LLM 调用，但 MinerU 云端识别仍全册消耗。
+
+### 方案（用户需求 1:1 落地）
+
+| 需求 | 实现 |
+|------|------|
+| ① 统一免费/登录额度管理 | `QuotaActor`（Guest(ip) / User(name)）统一计费主体；同一张 `page_usage` 表、同一套扣减/熔断/幂等逻辑 |
+| ② 游客 5 页 / 24h，登录 1000 页 / 24h | `GEMINUS_ANON_PAGE_LIMIT=5` / `GEMINUS_USER_PAGE_LIMIT=1000`；`used_pages` 只统计 `charged_at > now-24h` 的扣减（滚动窗口逐页恢复，`reset_at` 返回最早恢复点） |
+| ③ 超页文件只处理额度内页数 | 解析不再按页数 402：剩余 0 页才 402；否则 `cap = min(文件页数, 剩余)`——MinerU 在线识别前 `pdf::crop_pdf` 预裁剪到前 cap 页（builtin/DOCX 本地解析便宜不裁，翻译循环按批截断） |
+| ④ 识别+翻译 1 页 = 1 计数单位 | 唯一扣费点是翻译循环 `commit_chunk`（每批 1 页）；解析/查看零扣减；批级幂等键 `(actor, hash, batch)`——断点续传/缓存秒回不重复扣；幂等限定在窗口内（滑出窗口 = 新计费周期，`REPLACE` 覆盖旧键） |
+| ⑤ 后端不超发处理 | MinerU 只送裁剪件（集成测试断言上游收到的 PDF 页数 == 剩余额度）；翻译循环控制点 ③ 逐批熔断，`limit_reached` 事件携带 `translated_pages`（已译部分保留可读） |
+
+### 关键变更
+
+- `quota.rs`：`anon_page_usage`（ip 主键）→ `page_usage`（actor 主键，key 前缀 `ip:` / `user:` 隔离命名空间）；旧表数据自动迁移（旧记录带 charged_at 滑出窗口 = 一次性重置，修复「永不重置」存量问题）；7 天前记录开库顺手清理
+- `lib.rs`：`quota_actor()` 统一主体解析（登录用户名 / 匿名 IP / 本地直连不计）；`allowed_pages` + `crop_pdf_for_quota`（裁剪件名沿用原标题主干 + 短 uuid，标题不劣化）；MinerU 缓存命中/离线重放为零 API 路径不裁剪（用全量 IR，翻译仍按额度截断）；`/api/quota` 游客与登录统一 finite 口径（+`reset_at`）；402 与 `limit_reached` 载荷 +`user`/`translated_pages`/`reset_at`
+- `geminus-core/src/pdf/mod.rs`：`crop_pdf(src, keep, dest)`（lopdf 删页另存）
+- 前端：删除 `useQuotaGuard`（本地拦截不复存在——超页文件直接上传，部分处理由服务端负责）；`useAutoPipeline` 移除 precheck/blocked 阶段；`QuotaExceededCard` 统一单 variant（24h 恢复 + 已译 N 页可读 + 登录 1000 页/天引导；登录用户文案不含登录按钮）；`QuotaIndicator` 登录态也渲染（剩余 N/1000 页）；Toolbar 登录区加入指示器
+
+### 计划偏差记录
+
+1. **「22 页」根因不可精确复现**（HEAD 代码口径为 11）：按用户语义定性为「识别/翻译分开计量」的观感问题 + v2.4「查看+翻译」文案口径——新方案以「单计量单位 + 解析永不扣费」结构性消除该类问题。
+2. **DOCX 页数估算不裁剪**：DOCX 无真实页数，本地解析成本可忽略，翻译按估算批截断即达标；仅 PDF（MinerU 云端成本）做预裁剪。
+3. **裁剪件缓存碎片化**：不同 cap 值产生不同哈希、各自缓存（游客 cap ∈ [1,5] 有界）；全量缓存命中时用全量 IR 不裁剪——优先复用已有解析成果。
+
+### 验证
+
+- Rust **327** 全绿（新增：24h 窗口滑动/批键窗口化重扣/主体隔离/用户 1000 页上限/两代旧表迁移 + MinerU 裁剪上传集成 + 单文档内部分处理熔断）
+- 前端 **168** 全绿（删除 useQuotaGuard 4 项；新增登录态指示器/部分处理卡片语义）
+- clippy `--all-targets` 0 警告；`tsc --noEmit` + `vite build` 通过
+- 本地冒烟 **29/29**（隔离实例，含 v2.5 额度段）；实机验证：游客译 2 页 PDF 恰扣 2 页
+  （remaining=3、reset_at 下发），扣减回拨 24h 后满额恢复；缓存秒回零扣费路径复验

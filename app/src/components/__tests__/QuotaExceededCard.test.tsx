@@ -2,43 +2,41 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import QuotaExceededCard from '../QuotaExceededCard';
 
-describe('QuotaExceededCard（v2.4.1 variant 拆分）', () => {
-  const quota = { limit: 5, used: 5, required: 1 };
-  const precheckQuota = { limit: 5, used: 3, required: 11 };
+describe('QuotaExceededCard（v2.5 统一部分处理文案）', () => {
+  const guestQuota = { limit: 5, used: 5, required: 1, translated_pages: 5, reset_at: 1770000000 };
+  const exhaustedQuota = { limit: 5, used: 5, required: 1 };
+  const userQuota = { limit: 1000, used: 1000, translated_pages: 3, reset_at: 1770000000, user: true };
 
-  it('limit：展示已译可读承诺 + [查看已译部分] / [知道了]', () => {
-    render(
-      <QuotaExceededCard quota={quota} variant="limit" onLogin={() => {}} onViewTranslated={() => {}} onDismiss={() => {}} />,
-    );
-    expect(screen.getByTestId('quota-exceeded-card')).toBeTruthy();
-    expect(screen.getByText(/游客最多可翻译 5 页/)).toBeTruthy();
-    expect(screen.getByText(/已翻译的部分仍可继续阅读/)).toBeTruthy();
-    expect(screen.getByTestId('quota-view-translated-btn')).toBeTruthy();
-    expect(screen.getByTestId('quota-dismiss-btn')).toBeTruthy();
-    expect(screen.queryByTestId('quota-pick-another-btn')).toBeNull();
-  });
-
-  it('limit 无 onViewTranslated（无已译内容兜底）：不渲染该按钮', () => {
-    render(<QuotaExceededCard quota={quota} variant="limit" onLogin={() => {}} onDismiss={() => {}} />);
-    expect(screen.queryByTestId('quota-view-translated-btn')).toBeNull();
-  });
-
-  it('precheck：明确「该文件未开始翻译」+ 剩余/需要页数 + [换个文件试试]，不承诺已译可读', () => {
+  it('游客熔断：已译页数可读 + 24h 恢复 + 登录引导（每天 1000 页）', () => {
     render(
       <QuotaExceededCard
-        quota={precheckQuota}
-        variant="precheck"
+        quota={guestQuota}
         onLogin={() => {}}
-        onPickAnother={() => {}}
+        onViewTranslated={() => {}}
         onDismiss={() => {}}
       />,
     );
-    expect(screen.getByText(/该文件未开始翻译/)).toBeTruthy();
-    expect(screen.getByText(/剩余 2 页/)).toBeTruthy();
-    expect(screen.getByText(/需要 11 页/)).toBeTruthy();
-    expect(screen.getByTestId('quota-pick-another-btn')).toBeTruthy();
+    expect(screen.getByTestId('quota-exceeded-card')).toBeTruthy();
+    expect(screen.getByText(/游客每 24 小时最多翻译 5 页/)).toBeTruthy();
+    expect(screen.getByText(/已翻译的前 5 页仍可继续阅读/)).toBeTruthy();
+    expect(screen.getByText(/逐页恢复/)).toBeTruthy();
+    expect(screen.getByText(/登录后每天可翻译 1000 页/)).toBeTruthy();
+    expect(screen.getByTestId('quota-view-translated-btn')).toBeTruthy();
+    expect(screen.getByTestId('quota-login-btn')).toBeTruthy();
+    expect(screen.getByTestId('quota-dismiss-btn')).toBeTruthy();
+  });
+
+  it('额度耗尽（无已译页）：不渲染「查看已译部分」', () => {
+    render(<QuotaExceededCard quota={exhaustedQuota} onLogin={() => {}} onDismiss={() => {}} />);
     expect(screen.queryByTestId('quota-view-translated-btn')).toBeNull();
-    expect(screen.queryByText(/已翻译的部分仍可继续阅读/)).toBeNull();
+    expect(screen.getByText(/游客每 24 小时最多翻译 5 页/)).toBeTruthy();
+  });
+
+  it('登录用户（1000 页用尽）：不渲染登录引导，仅提示恢复', () => {
+    render(<QuotaExceededCard quota={userQuota} onLogin={() => {}} onDismiss={() => {}} />);
+    expect(screen.queryByTestId('quota-login-btn')).toBeNull();
+    expect(screen.getByText(/每 24 小时最多翻译 1000 页/)).toBeTruthy();
+    expect(screen.getByText(/逐页恢复/)).toBeTruthy();
   });
 
   it('回调分别触发', () => {
@@ -46,7 +44,12 @@ describe('QuotaExceededCard（v2.4.1 variant 拆分）', () => {
     const onDismiss = vi.fn();
     const onViewTranslated = vi.fn();
     render(
-      <QuotaExceededCard quota={quota} variant="limit" onLogin={onLogin} onViewTranslated={onViewTranslated} onDismiss={onDismiss} />,
+      <QuotaExceededCard
+        quota={guestQuota}
+        onLogin={onLogin}
+        onViewTranslated={onViewTranslated}
+        onDismiss={onDismiss}
+      />,
     );
     fireEvent.click(screen.getByTestId('quota-login-btn'));
     expect(onLogin).toHaveBeenCalledOnce();

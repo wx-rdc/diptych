@@ -7,7 +7,8 @@
 //!
 //! 部署安全加固（docs/deploy_plan.md）：
 //! - 认证：POST /api/auth/login|logout、GET /api/auth/me（预设用户，无自助注册）
-//! - 限流：未登录按 IP 累计「查看+翻译」5 页（SQLite 持久）；登录用户不受限
+//! - 限额（v2.5 统一额度）：游客 5 页 / 24h（按 IP），登录用户 1000 页 / 24h（按用户名）；
+//!   识别+翻译 1 页 = 1 个计数单位；超额度文件只处理额度内页数（PDF 预裁剪，不浪费云端识别）
 //! - 本地路径解析默认禁用（GEMINUS_ALLOW_LOCAL_PATH=1 开启，供本地开发）
 
 pub mod access;
@@ -38,7 +39,7 @@ use serde_json::json;
 use tokio::sync::mpsc;
 
 use crate::auth::AuthService;
-use crate::quota::{QuotaStore, RateWindow};
+use crate::quota::{QuotaActor, QuotaStore, RateWindow};
 
 /// 应用状态（Clone 共享）
 #[derive(Clone)]
@@ -60,7 +61,7 @@ pub struct AppState {
     mineru: Arc<Mutex<Option<MineruClient>>>,
     /// 认证服务（未配置预设用户时登录不可用）
     auth: Arc<AuthService>,
-    /// 匿名页数配额（未登录按 IP）
+    /// 统一页数配额（游客按 IP / 登录按用户名；本地直连不计）
     quota: Arc<QuotaStore>,
     /// 匿名单段重译频次窗口（二级防线）
     paragraph_rate: RateWindow,
@@ -99,7 +100,9 @@ impl AppState {
             // 显式构造不自动读 env（测试确定性）；生产入口 from_env 配置
             mineru: Arc::new(Mutex::new(None)),
             auth: Arc::new(AuthService::disabled(Duration::from_secs(7 * 24 * 3600))),
-            quota: Arc::new(QuotaStore::open_in_memory(5).expect("配额内存库初始化失败")),
+            quota: Arc::new(
+                QuotaStore::open_in_memory(5, 1000).expect("配额内存库初始化失败"),
+            ),
             paragraph_rate: RateWindow::new(30, Duration::from_secs(3600)),
             uploads_dir: std::env::temp_dir().join("geminus-uploads"),
             mineru_cache_root: PathBuf::from("data/mineru_cache"),
@@ -180,13 +183,17 @@ impl AppState {
             .and_then(|v| v.parse().ok())
             .unwrap_or(3);
 
-        let anon_limit = std::env::var("GEMINUS_ANON_PAGE_LIMIT")
+        let guest_limit = std::env::var("GEMINUS_ANON_PAGE_LIMIT")
             .ok()
             .and_then(|v| v.parse::<i64>().ok())
             .unwrap_or(5);
+        let user_limit = std::env::var("GEMINUS_USER_PAGE_LIMIT")
+            .ok()
+            .and_then(|v| v.parse::<i64>().ok())
+            .unwrap_or(1000);
         let quota_db = std::env::var("GEMINUS_AUTH_DB")
             .unwrap_or_else(|_| "data/auth_quota.db".to_string());
-        let quota = QuotaStore::open_at(&PathBuf::from(&quota_db), anon_limit)
+        let quota = QuotaStore::open_at(&PathBuf::from(&quota_db), guest_limit, user_limit)
             .unwrap_or_else(|e| panic!("配额库 {quota_db} 打开失败: {e}"));
 
         let users_file = std::env::var("GEMINUS_USERS_FILE")
@@ -319,6 +326,15 @@ fn current_user(state: &AppState, headers: &HeaderMap) -> Option<String> {
         .get(axum::http::header::COOKIE)
         .and_then(|v| v.to_str().ok());
     state.auth.session_user(cookie)
+}
+
+/// v2.5 统一额度主体：登录用户按用户名计（1000 页/24h），匿名按 IP 计（5 页/24h）。
+/// None = 本地直连匿名（无代理头）→ 本地开发流量，不计额。
+fn quota_actor(user: &Option<String>, headers: &HeaderMap) -> Option<QuotaActor> {
+    match user {
+        Some(name) => Some(QuotaActor::User(name.clone())),
+        None => client_ip(headers).map(QuotaActor::Guest),
+    }
 }
 
 /// v2.4 权限收口：require_login 开启时，查看/翻译类端点匿名一律 401
@@ -625,48 +641,73 @@ async fn parse_upload_handler(state: AppState, req: axum::extract::Request) -> R
     parse_from_path(&state, saved, &parser, &headers, Some(name.as_str())).await
 }
 
-/// v2.4：预检超限响应（402 + 结构化字段，前端 QuotaExceededCard 直接消费）
-fn quota_402(state: &AppState, ip: &str, required: i64) -> Response {
-    let limit = state.quota.limit();
-    let used = state.quota.used_pages(ip);
+/// v2.5：额度耗尽响应（402 + 结构化字段，前端额度卡片直接消费）。
+/// 只在「剩余 0 页、无可处理内容」时返回——超页文件走部分处理，不再整体拒绝。
+fn quota_402(state: &AppState, actor: &QuotaActor, required: i64) -> Response {
+    let limit = state.quota.limit_for(actor);
+    let used = state.quota.used_pages(actor);
+    let reset_at = state.quota.reset_at(actor);
+    let (who, hint) = if actor.is_user() {
+        (format!("24 小时内最多翻译 {limit} 页"), "额度每 24 小时滚动恢复。".to_string())
+    } else {
+        (
+            format!("游客 24 小时内最多翻译 {limit} 页"),
+            format!("额度每 24 小时滚动恢复；登录后每天可翻译 {} 页。", state.quota.limit_for(&QuotaActor::User(String::new()))),
+        )
+    };
     (
         StatusCode::PAYMENT_REQUIRED,
         Json(json!({
-            "error": format!("游客最多可翻译 {limit} 页（剩余 {} 页，本文件需 {required} 页）。登录后不限量使用。", (limit - used).max(0)),
+            "error": format!("{who}（当前已用 {used} 页，还需 {required} 页）。{hint}"),
             "limit": limit,
             "used": used,
             "required": required,
+            "reset_at": reset_at,
+            "user": actor.is_user(),
         })),
     )
         .into_response()
 }
 
-/// 匿名配额预检（v2.4 三段式第 1 段）：解析前拦截，保护 MinerU 不被超限请求消耗。
-/// - PDF：真实页数（lopdf）；
-/// - DOCX：本地解析后的估算页数 ×1.2 保守上浮（防低估烧云端/LLM）。
-/// - 超限 → 402（MinerU 未调用）；通过 → 不落账（实扣在翻译循环，见 translate_handler）。
-fn anon_precheck_pages(state: &AppState, ip: Option<&str>, pages: i64) -> Option<Response> {
-    let ip = ip?;
-    if pages > 0 && state.quota.would_exceed(ip, pages) {
-        return Some(quota_402(state, ip, pages));
-    }
-    None
+/// 额度内可处理页数（None = 本地直连匿名，不限）。剩余 0 页由调用方先行 402。
+fn allowed_pages(state: &AppState, actor: &QuotaActor, file_pages: i64) -> i64 {
+    state.quota.remaining(actor).min(file_pages.max(1))
 }
 
-/// PDF 解析前预检（真实页数）
-fn anon_precheck_pdf(state: &AppState, ip: Option<&str>, path: &std::path::Path) -> Option<Response> {
-    let ip = ip?;
-    if matches!(detect_file_type(path), Ok(FileType::Pdf)) {
-        if let Ok(pages) = geminus_core::pdf::count_pages(path) {
-            return anon_precheck_pages(state, Some(ip), pages as i64);
+/// PDF 预裁剪（v2.5：云端识别只送额度内页面，不浪费 MinerU 资源）。
+/// `allowed ≥ 总页数` 或非 PDF → 原样返回；否则截前 allowed 页落盘 uploads 返回新路径。
+fn crop_pdf_for_quota(
+    state: &AppState,
+    path: &std::path::Path,
+    allowed: Option<i64>,
+) -> std::path::PathBuf {
+    let Some(allowed) = allowed else {
+        return path.to_path_buf();
+    };
+    if !matches!(detect_file_type(path), Ok(FileType::Pdf)) {
+        return path.to_path_buf();
+    }
+    let Ok(total) = geminus_core::pdf::count_pages(path) else {
+        return path.to_path_buf();
+    };
+    if (allowed as usize) >= total {
+        return path.to_path_buf();
+    }
+    let cropped = state.uploads_dir.join(format!(
+        "{}.{}.pdf",
+        path.file_stem().and_then(|s| s.to_str()).unwrap_or("doc"),
+        &uuid::Uuid::new_v4().simple().to_string()[..8]
+    ));
+    match geminus_core::pdf::crop_pdf(path, allowed.max(1) as usize, &cropped) {
+        Ok(kept) => {
+            eprintln!("[quota] 额度内部分处理：{} 页 → 截取前 {kept} 页（{})", total, cropped.display());
+            cropped
+        }
+        Err(e) => {
+            eprintln!("[quota] PDF 预裁剪失败（回退整文件解析）: {e}");
+            path.to_path_buf()
         }
     }
-    None
-}
-
-/// 匿名 DOCX 预检辅助：估算页数 ×1.2 保守上浮（计划风险缓解——估算偏差兜底）
-fn docx_estimate_pages_guarded(doc: &Document) -> i64 {
-    (doc.estimated_pages() as i64 * 12 / 10).max(1)
 }
 
 /// 文件内容哈希（失败退化为 doc_id，与解析注册口径一致）
@@ -674,7 +715,9 @@ fn hash_of(_state: &AppState, doc: &Document, path: &std::path::Path) -> String 
     TranslationCache::file_sha256(path).unwrap_or_else(|_| doc.id.clone())
 }
 
-/// 解析主流程（两个入口共用）：quota 预检 → builtin JSON / MinerU SSE → 成功后计费注册。
+/// 解析主流程（两个入口共用）：额度闸门 → builtin JSON / MinerU SSE → 注册。
+/// v2.5：不整体拒绝超页文件——额度耗尽才 402；有剩余则部分处理
+/// （MinerU 在线识别前 PDF 预裁剪到额度内页数；builtin 本地解析后由翻译循环按页截断）。
 /// file_name：上传原名（JSON 本地路径分支传 None → 取文件主干）。
 async fn parse_from_path(
     state: &AppState,
@@ -697,32 +740,31 @@ async fn parse_from_path(
 
     let user = current_user(state, headers);
     let ip = if user.is_some() { None } else { client_ip(headers) };
-    // v2.4 预检第 1 段：PDF 真实页数拦截（DOCX 在下方本地解析后按估算复核）
-    if let Some(resp) = anon_precheck_pdf(state, ip.as_deref(), &path) {
-        return resp;
-    }
+    let actor = quota_actor(&user, headers);
+    // 额度闸门：剩余 0 页 → 402（无任何可处理内容）；
+    // PDF 已知页数 → 算出可处理页数上限（MinerU 在线识别按此预裁剪）；
+    // DOCX / 页数未知 → 本地解析成本低，解析不截断（翻译循环按批熔断）
+    let cap: Option<i64> = match (&actor, geminus_core::pdf::count_pages(&path).ok()) {
+        (Some(a), _) if state.quota.remaining(a) < 1 => {
+            return quota_402(state, a, 1);
+        }
+        (Some(a), Some(n)) => Some(allowed_pages(state, a, n as i64)),
+        _ => None, // 本地直连匿名（不计额）或页数未知（DOCX——count_pages 仅适用 PDF）
+    };
     // v2.4：require_login 下匿名上传成功只回外壳（无 IR）；历史登记用的展示名
     let display_name = file_name
         .map(|s| s.to_string())
         .unwrap_or_else(|| file_stem(&path));
     let anon_shell = state.require_login && user.is_none();
 
-    // 非 MinerU 路径：同步 JSON（v1 行为）
+    // 非 MinerU 路径：同步 JSON（v1 行为）。本地解析便宜，整册解析；
+    // 翻译消耗（LLM）由 translate 循环按剩余额度逐批截断。
     let use_mineru = parser != "builtin"
         && matches!(detect_file_type(&path), Ok(FileType::Pdf))
         && state.mineru_client().is_some();
     if !use_mineru {
         return match parse_any(&path) {
             ParseOutcome::Ok(doc, ft) => {
-                // v2.4 预检第 2 段：DOCX/本地 PDF 解析后按计费页数复核（不实扣——实扣在翻译循环）
-                let pages = if ft == FileType::Docx {
-                    docx_estimate_pages_guarded(&doc)
-                } else {
-                    state.chargeable_pages(&doc, Some(&path))
-                };
-                if let Some(resp) = anon_precheck_pages(state, ip.as_deref(), pages) {
-                    return resp;
-                }
                 eprintln!("[parse] {} [{}] {} 块", ft.label(), path.display(), doc.blocks.len());
                 register_doc(state, &doc, &path, &hash_of(state, &doc, &path), user.as_deref(), &display_name);
                 let token = issue_doc_access(state, &doc.id, ip.as_deref(), user.is_some(), &display_name);
@@ -753,6 +795,7 @@ async fn parse_from_path(
     let ip2 = ip.clone();
     let user2 = user.clone();
     let display_name2 = display_name.clone();
+    let cap2 = cap;
 
     let (tx, rx) = mpsc::channel::<Result<Event, std::convert::Infallible>>(256);
     tokio::spawn(async move {
@@ -839,11 +882,22 @@ async fn parse_from_path(
             }
         }
 
-        // 端到端 MinerU 解析（async 网络任务，直接在 tokio 上跑）
+        // 端到端 MinerU 解析（async 网络任务，直接在 tokio 上跑）。
+        // v2.5 部分处理：缓存未命中才需要云端识别 → 先把 PDF 预裁剪到额度内页数
+        //（缓存命中/离线重放是零 API 路径，用全量 IR，翻译仍按额度截断）。
+        let parse_path = crop_pdf_for_quota(&state2, &path, cap2);
+        if parse_path != path {
+            let _ = stage_tx
+                .send(json!({
+                    "stage": "cropped",
+                    "message": format!("文件超出剩余额度，只处理前 {} 页（登录后可继续）", cap2.unwrap_or(0)),
+                }))
+                .await;
+        }
         let mut work = std::env::temp_dir();
         work.push(format!("geminus_mineru_{}", uuid::Uuid::new_v4().simple()));
         let stage_tx2 = stage_tx.clone();
-        let result = mineru::parse_pdf_mineru(&path, &client, &MineruConfig::default(),
+        let result = mineru::parse_pdf_mineru(&parse_path, &client, &MineruConfig::default(),
             &SplitConfig::default(), &work, move |stage| {
                 let payload = serde_json::to_value(stage).unwrap_or_default();
                 // 回调在 async 上下文里同步执行——用 try_send 避免 backpressure 死锁
@@ -878,21 +932,21 @@ async fn parse_from_path(
             }
         };
 
-        // 成功或回退：builtin 兜底（回退场景）+ 注册 + done
-        let doc = parsed.or_else(|| match parse_any(&path) {
+        // 成功或回退：builtin 兜底（回退场景；同样只解析裁剪件，保持额度内口径）+ 注册 + done
+        let doc = parsed.or_else(|| match parse_any(&parse_path) {
             ParseOutcome::Ok(doc, _) => Some(doc),
             _ => None,
         });
         match doc {
             Some(doc) => {
-                if let Ok(h) = TranslationCache::file_sha256(&path) {
-                    // v2.2 T1：在线解析成功 → raw 持久化（chunk 目录 + raw_meta）+ 版本化 IR 缓存
-                    let raw_root = persist_mineru_raw(&state2, &work, &h);
-                    let _ = cache.put_mineru_parse(&h, &doc, raw_root.as_deref(),
-                        geminus_core::cache::IR_SCHEMA_VERSION);
-                }
-                // v2.4：解析不实扣（实扣在翻译循环）；预检已在解析前完成
-                register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
+                // 缓存键随实际送解析的文件（裁剪件哈希 ≠ 原件哈希，各自独立缓存）
+                let online_hash = TranslationCache::file_sha256(&parse_path).unwrap_or_else(|_| hash.clone());
+                // v2.2 T1：在线解析成功 → raw 持久化（chunk 目录 + raw_meta）+ 版本化 IR 缓存
+                let raw_root = persist_mineru_raw(&state2, &work, &online_hash);
+                let _ = cache.put_mineru_parse(&online_hash, &doc, raw_root.as_deref(),
+                    geminus_core::cache::IR_SCHEMA_VERSION);
+                // v2.5：解析不实扣（实扣在翻译循环，按批熔断）
+                register_doc(&state2, &doc, &parse_path, &online_hash, user2.as_deref(), &display_name2);
                 let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some(), &display_name2);
                 send_done(&tx, &doc, anon_shell, &token).await;
             }
@@ -1147,13 +1201,13 @@ async fn translate_handler(
         return err_response(StatusCode::NOT_FOUND, format!("文档不存在: {}", req.doc_id));
     };
 
-    // v2.4 T5 三段式：匿名翻译开流前置检查（剩余 ≥1 页；循环内逐批熔断）。
+    // v2.5 统一额度：开流前置检查（剩余 ≥1 页；循环内逐批熔断）。
     // 回访豁免：该文档存在已付费批 → 放行（缓存秒回 + 已付批续译，零新增消耗）
-    let ip = if user.is_some() { None } else { client_ip(&headers) };
-    if let Some(ip) = &ip {
+    let actor = quota_actor(&user, &headers);
+    if let Some(actor) = &actor {
         let hash = state.content_hash_of(&req.doc_id);
-        if state.quota.remaining(ip) < 1 && !state.quota.has_any_charged_batch(ip, &hash) {
-            return quota_402(&state, ip, 1);
+        if state.quota.remaining(actor) < 1 && !state.quota.has_any_charged_batch(actor, &hash) {
+            return quota_402(&state, actor, 1);
         }
     }
 
@@ -1170,7 +1224,7 @@ async fn translate_handler(
     let source_lang = req.source_lang;
     let target_lang = req.target_lang;
     let quota = state.quota.clone();
-    let quota_ip = ip.clone();
+    let quota_actor = actor.clone();
     let hash = state.content_hash_of(&req.doc_id);
 
     tokio::spawn(async move {
@@ -1194,18 +1248,24 @@ async fn translate_handler(
                 outcome = Some("cancelled");
                 break;
             }
-            // 控制点 ③：匿名熔断检查点（remaining < 本批页数）。
+            // 控制点 ③：额度熔断检查点（remaining < 本批页数）。
             // 已付费批豁免——回访/续译已译文档走缓存秒回（零 LLM 调用、实扣幂等跳过），
             // 兑现「已翻译的部分仍可继续阅读（与续译）」承诺。
-            if let Some(ip) = quota_ip.as_deref() {
-                let remaining = quota.remaining(ip);
+            if let Some(actor) = quota_actor.as_ref() {
+                let remaining = quota.remaining(actor);
                 if remaining < batch.pages
-                    && !quota.already_charged_batch(ip, &hash, batch_idx as i64)
+                    && !quota.already_charged_batch(actor, &hash, batch_idx as i64)
                 {
-                    let used = quota.used_pages(ip);
+                    let used = quota.used_pages(actor);
                     let _ = tx
                         .send(Ok(Event::default().event("limit_reached").data(
-                            json!({ "limit": quota.limit(), "used": used, "required": batch.pages }).to_string(),
+                            json!({
+                                "limit": quota.limit_for(actor),
+                                "used": used,
+                                "required": batch.pages,
+                                "translated_pages": translated_pages,
+                                "user": actor.is_user(),
+                            }).to_string(),
                         )))
                         .await;
                     outcome = Some("limit_reached");
@@ -1277,18 +1337,24 @@ async fn translate_handler(
             };
             offset += batch_current;
             translated_pages += batch.pages;
-            // 匿名实扣（三段式第 2 段）：
+            // 批级实扣（识别+翻译 1 页 = 1 单位；同 (actor, hash, batch) 幂等）：
             // - 本批全部可译块缓存命中（零 LLM 调用）→ 免费秒回；
-            // - 其余批：事务扣本批页数，(ip, hash, batch) 幂等（断点续传不重复扣）
+            // - 其余批：事务扣本批页数，断点续传不重复扣
             let all_cached = batch_task_total > 0 && batch_cached >= batch_task_total;
-            if let Some(ip) = quota_ip.as_deref() {
+            if let Some(actor) = quota_actor.as_ref() {
                 if !all_cached {
-                    if let Err(e) = quota.commit_chunk(ip, &hash, batch_idx as i64, batch.pages) {
-                        // 并发下他人恰好用尽额度：已译并入（progress 已流出），按熔断收口
+                    if let Err(e) = quota.commit_chunk(actor, &hash, batch_idx as i64, batch.pages) {
+                        // 并发下额度恰好用尽：已译并入（progress 已流出），按熔断收口
                         pairs.extend(result.pairs);
                         let _ = tx
                             .send(Ok(Event::default().event("limit_reached").data(
-                                json!({ "limit": e.limit, "used": e.used, "required": batch.pages }).to_string(),
+                                json!({
+                                    "limit": e.limit,
+                                    "used": e.used,
+                                    "required": batch.pages,
+                                    "translated_pages": translated_pages,
+                                    "user": actor.is_user(),
+                                }).to_string(),
                             )))
                             .await;
                         outcome = Some("limit_reached");
@@ -1335,22 +1401,22 @@ async fn translate_handler(
     Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
 }
 
-/// v2.4 T3/T6：当前访问者配额状态（匿名按 IP；登录与本地直连不限量）
+/// v2.5：当前访问者配额状态（游客按 IP 5 页/24h；登录按用户名 1000 页/24h；
+/// 本地直连匿名不限）。统一 finite 口径，前端同一组件渲染。
 async fn quota_status_handler(State(state): State<AppState>, headers: HeaderMap) -> Response {
-    let unlimited = json!({ "anonymous": false, "unlimited": true, "remaining": null });
-    match current_user(&state, &headers) {
-        Some(_) => Json(unlimited).into_response(),
-        None => match client_ip(&headers) {
-            Some(ip) => Json(json!({
-                "anonymous": true,
-                "unlimited": false,
-                "limit": state.quota.limit(),
-                "used": state.quota.used_pages(&ip),
-                "remaining": state.quota.remaining(&ip),
-            }))
+    let user = current_user(&state, &headers);
+    match quota_actor(&user, &headers) {
+        None => Json(json!({ "anonymous": true, "unlimited": true, "remaining": null }))
             .into_response(),
-            None => Json(unlimited).into_response(),
-        },
+        Some(actor) => Json(json!({
+            "anonymous": !actor.is_user(),
+            "unlimited": false,
+            "limit": state.quota.limit_for(&actor),
+            "used": state.quota.used_pages(&actor),
+            "remaining": state.quota.remaining(&actor),
+            "reset_at": state.quota.reset_at(&actor),
+        }))
+        .into_response(),
     }
 }
 
@@ -1574,17 +1640,17 @@ async fn translate_paragraph_handler(
     let Some(doc) = state.get_doc(&req.doc_id) else {
         return err_response(StatusCode::NOT_FOUND, format!("文档不存在: {}", req.doc_id));
     };
-    // 匿名门控：文档必须在该 IP 的免费额度内（防脚本化刷 LLM 调用），且每小时限 30 次
-    if current_user(&state, &headers).is_none() {
-        if let Some(ip) = client_ip(&headers) {
-            let hash = state.content_hash_of(&req.doc_id);
-            if !state.quota.already_charged(&ip, &hash) {
-                return err_response(
-                    StatusCode::TOO_MANY_REQUESTS,
-                    "该文档不在当前未登录额度内，请登录后使用单段重译",
-                );
-            }
-            if !state.paragraph_rate.allow(&ip) {
+    // 额度门控：文档必须在该访问者的额度内（防脚本化刷 LLM 调用），且每小时限 30 次
+    if let Some(actor) = quota_actor(&current_user(&state, &headers), &headers) {
+        let hash = state.content_hash_of(&req.doc_id);
+        if !state.quota.has_any_charged_batch(&actor, &hash) {
+            return err_response(
+                StatusCode::TOO_MANY_REQUESTS,
+                "该文档不在当前访问者的已用额度内，请登录后使用单段重译",
+            );
+        }
+        if let QuotaActor::Guest(ip) = &actor {
+            if !state.paragraph_rate.allow(ip) {
                 return err_response(StatusCode::TOO_MANY_REQUESTS, "操作过于频繁，请稍后再试或登录后使用");
             }
         }

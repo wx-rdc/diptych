@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
-import { BackendError, parseDoc, translateDoc, fetchQuota as backendFetchQuota } from '../services/backend';
+import { BackendError, QuotaLimitError, parseDoc, translateDoc, fetchQuota as backendFetchQuota } from '../services/backend';
 import { fetchMe } from '../services/auth';
 import type { GDocument, TranslateProgress, TranslatedDocument } from '../types';
 
@@ -167,15 +167,17 @@ describe('App 集成（mock backend，零点击流水线）', () => {
   });
 });
 
-// ── v2.4：402/401 软性引导（替代旧 require_login 前端拦截） ──
+// ── v2.5：统一额度（部分处理；额度耗尽 402 软性引导） ──
 
-describe('v2.4 配额与权限引导', () => {
-  it('解析遇 402（额度不足）→ QuotaExceededCard 引导登录（非弹框拦截）', async () => {
+describe('v2.5 配额与权限引导', () => {
+  it('解析遇 402（额度耗尽，剩余 0）→ QuotaExceededCard 引导登录（非弹框拦截）', async () => {
     vi.mocked(parseDoc).mockRejectedValue(
-      new BackendError('游客最多可翻译 5 页（剩余 0 页，本文件需 10 页）', 402, {
+      new BackendError('游客 24 小时内最多翻译 5 页（当前已用 5 页，还需 1 页）', 402, {
         limit: 5,
         used: 5,
-        required: 10,
+        required: 1,
+        reset_at: 1770000000,
+        user: false,
       }),
     );
     render(<App />);
@@ -183,32 +185,29 @@ describe('v2.4 配额与权限引导', () => {
     fireEvent.change(input, { target: { value: '/tmp/big.pdf' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(screen.getByTestId('quota-exceeded-card')).toBeInTheDocument());
-    expect(screen.getByTestId('quota-exceeded-card').textContent).toContain('需要 10 页');
+    expect(screen.getByTestId('quota-exceeded-card').textContent).toContain('游客每 24 小时最多翻译 5 页');
     expect(screen.getByTestId('quota-login-btn')).toBeInTheDocument();
-    expect(screen.getByTestId('quota-pick-another-btn')).toBeInTheDocument();
-    // precheck 不承诺已译可读
+    // 额度耗尽（无已译内容）不承诺已译可读
     expect(screen.queryByTestId('quota-view-translated-btn')).toBeNull();
   });
 
-  it('本地预检拦截（11 页 > 剩余 2）→ precheck 卡片且不上传', async () => {
+  it('超页文件不再本地拦截——直接上传解析（部分处理由服务端负责）', async () => {
     vi.mocked(backendFetchQuota).mockResolvedValue({
       anonymous: true, unlimited: false, limit: 5, used: 3, remaining: 2,
     });
     vi.mocked(parseDoc).mockResolvedValue(doc);
+    vi.mocked(translateDoc).mockRejectedValue(
+      new QuotaLimitError({ limit: 5, used: 5, required: 1, translated_pages: 2 }),
+    );
     render(<App />);
     const input = screen.getByTestId('file-path-input');
-    fireEvent.change(input, { target: { value: '/tmp/big.pdf' } });
+    fireEvent.change(input, { target: { value: '/tmp/big11pages.pdf' } });
     fireEvent.keyDown(input, { key: 'Enter' });
+    // 不再被本地预检挡住：parseDoc 正常发起
+    await waitFor(() => expect(parseDoc).toHaveBeenCalled());
+    // 服务端部分处理后熔断 → 卡片展示已译页数
     await waitFor(() => expect(screen.getByTestId('quota-exceeded-card')).toBeInTheDocument());
-    const cardText = screen.getByTestId('quota-exceeded-card').textContent ?? '';
-    expect(cardText).toContain('该文件未开始翻译');
-    expect(cardText).toContain('需要 11 页');
-    expect(cardText).toContain('剩余 2 页');
-    // 未上传（本地预检拦截在上传之前）
-    expect(parseDoc).not.toHaveBeenCalled();
-    // 「换个文件试试」→ 关卡片并触发 App 层文件选择
-    fireEvent.click(screen.getByTestId('quota-pick-another-btn'));
-    expect(screen.queryByTestId('quota-exceeded-card')).toBeNull();
+    expect(screen.getByTestId('quota-exceeded-card').textContent).toContain('已翻译的前 2 页仍可继续阅读');
   });
 
   it('解析遇 401/403（需登录/无权访问）→ 弹出登录对话框并展示文案', async () => {
@@ -230,7 +229,7 @@ describe('v2.4 配额与权限引导', () => {
         onProgress({ block_id: 'b1', current: 1, total: 4, status: 'done', translated_text: '引言' });
         // 第二块熔断
         const { QuotaLimitError } = await import('../services/backend');
-        throw new QuotaLimitError({ limit: 5, used: 5, required: 1 });
+        throw new QuotaLimitError({ limit: 5, used: 5, required: 1, translated_pages: 2 });
       },
     );
     render(<App />);

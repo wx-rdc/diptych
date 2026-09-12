@@ -13,11 +13,18 @@ import type {
 
 const API_BASE = '/api';
 
-/** 402 结构化配额字段（QuotaExceededCard 消费） */
+/** 402 / limit_reached 结构化配额字段（QuotaExceededCard 消费） */
 export interface QuotaInfo {
   limit: number;
   used: number;
-  required: number;
+  /** 触发拦截时还差多少页（熔断批页数） */
+  required?: number;
+  /** 触发时已完整译出的页数（部分处理成果） */
+  translated_pages?: number;
+  /** 最早一页额度恢复时间（unix 秒；24h 滚动窗口） */
+  reset_at?: number | null;
+  /** 计费主体是否登录用户（文案分支：登录用户不显示登录引导） */
+  user?: boolean;
 }
 
 export class BackendError extends Error {
@@ -34,12 +41,16 @@ export class BackendError extends Error {
   }
 }
 
-/** v2.4 T5：匿名额度用尽（解析预检 402 或翻译循环熔断 SSE 事件） */
+/** v2.5：额度用尽/熔断（解析 402 或翻译循环 limit_reached SSE 事件） */
 export class QuotaLimitError extends Error {
   readonly quota: QuotaInfo;
 
   constructor(quota: QuotaInfo) {
-    super(`游客最多可翻译 ${quota.limit} 页（已用 ${quota.used} 页，还需 ${quota.required} 页）`);
+    super(
+      quota.user
+        ? `24 小时内最多翻译 ${quota.limit} 页（已用 ${quota.used} 页）`
+        : `游客 24 小时内最多翻译 ${quota.limit} 页（已用 ${quota.used} 页），登录后每天可翻译 1000 页`,
+    );
     this.name = 'QuotaLimitError';
     this.quota = quota;
   }
@@ -61,10 +72,17 @@ async function backendErrorOf(res: Response, fallback: string): Promise<BackendE
   let message: string | null = null;
   let quota: QuotaInfo | undefined;
   try {
-    const body = (await res.json()) as { error?: string; limit?: number; used?: number; required?: number };
+    const body = (await res.json()) as Partial<QuotaInfo> & { error?: string };
     message = body.error ?? null;
-    if (res.status === 402 && body.limit != null && body.used != null && body.required != null) {
-      quota = { limit: body.limit, used: body.used, required: body.required };
+    if (res.status === 402 && body.limit != null && body.used != null) {
+      quota = {
+        limit: body.limit,
+        used: body.used,
+        required: body.required,
+        translated_pages: body.translated_pages,
+        reset_at: body.reset_at,
+        user: body.user,
+      };
     }
   } catch {
     /* 非 JSON 体 */
@@ -72,13 +90,15 @@ async function backendErrorOf(res: Response, fallback: string): Promise<BackendE
   return new BackendError(message ?? `${fallback}：HTTP ${res.status}`, res.status, quota);
 }
 
-/** v2.4 T3：当前访问者配额状态（GET /api/quota） */
+/** v2.5：当前访问者配额状态（GET /api/quota）——游客 5 页/24h，登录 1000 页/24h，本地直连不限 */
 export interface QuotaStatus {
   anonymous: boolean;
   unlimited: boolean;
   limit?: number;
   used?: number;
   remaining?: number | null;
+  /** 最早一页额度恢复时间（unix 秒；24h 滚动窗口；未用为 null） */
+  reset_at?: number | null;
 }
 
 export async function fetchQuota(): Promise<QuotaStatus> {

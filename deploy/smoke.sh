@@ -6,7 +6,7 @@
 #   BASE=https://<域名> ...            # 经 nginx 的公网验收（不注入 X-Real-IP，走真实 IP）
 # 说明：
 #   - 直连后端时用 X-Real-IP 头模拟公网客户端（生产由 nginx 覆盖式注入）；
-#   - 匿名限流段会消耗模拟 IP 各自的少量页数额度（SQLite 持久，不重置）。
+#   - 额度段只做零扣费断言（v2.5 起 24h 滚动窗口自动恢复，无需手动重置）。
 set -euo pipefail
 
 BASE="${BASE:-http://127.0.0.1:39321}"
@@ -50,20 +50,25 @@ CODE=$(curl -s -o /dev/null -w '%{http_code}' -H 'content-type: application/json
   -d '{"username":"nosuchuser","password":"wrong"}' "$BASE/api/auth/login")
 check "错误口令 → 401" 401 "$CODE"
 
-echo "== 4. 匿名配额预检（模拟 IP $QUOTA_IP，上限默认 5 页）=="
-# 大文件（>5 页）匿名上传 → 402 预检拦截（v2.4：MinerU 未调用；multipart = 公网真实语义；
-# JSON file_path 分支默认被服务器禁用，不用于限流验证）
+echo "== 4. 统一页数额度（v2.5：游客 5 页/24h；超页文件额度内部分处理）=="
+# 大文件（>5 页）匿名上传 → 200（v2.5 部分处理：不再整体 402，只译剩余额度内页数；
+# multipart = 公网真实语义；JSON file_path 分支默认被服务器禁用，不用于限流验证）
 LARGE_PDF="${LARGE_PDF:-test/fixtures/pdf/large.pdf}"
-PRECHECK=$(curl -s -w '\n%{http_code}' -H "X-Real-IP: $QUOTA_IP" \
+CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Real-IP: $QUOTA_IP" \
   -F "file=@$LARGE_PDF" -F "parser=builtin" "$BASE/api/parse")
-CODE=$(echo "$PRECHECK" | tail -1)
-check "匿名上传 ${LARGE_PDF##*/}（>5 页）→ 402" 402 "$CODE"
-echo "$PRECHECK" | head -1 | grep -q '"required"' && ok "402 含结构化字段 required" || bad "402 缺结构化字段"
+check "匿名上传 ${LARGE_PDF##*/}（>5 页）→ 200（部分处理）" 200 "$CODE"
 
-# 登录用户同文件 → 200（不受限）
+# 配额状态：解析本身不扣费（remaining 仍满额），带 24h 滚动窗口口径
+QUOTA_JSON=$(curl -s -H "X-Real-IP: $QUOTA_IP" "$BASE/api/quota")
+echo "$QUOTA_JSON" | grep -q '"anonymous":true' && ok "/api/quota 匿名结构" || bad "/api/quota 匿名异常: $QUOTA_JSON"
+echo "$QUOTA_JSON" | grep -q '"remaining":5' && ok "解析不扣费（remaining=5 满额）" || bad "解析不应扣费: $QUOTA_JSON"
+
+# 登录用户同文件 → 200（1000 页/24h 统一额度内）
 CODE=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -H "X-Real-IP: $QUOTA_IP" \
   -F "file=@$LARGE_PDF" -F "parser=builtin" "$BASE/api/parse")
-check "登录用户上传同文件 → 200（不受限）" 200 "$CODE"
+check "登录用户上传同文件 → 200（1000 页/24h 内）" 200 "$CODE"
+USER_QUOTA=$(curl -s -b "$JAR" -H "X-Real-IP: $QUOTA_IP" "$BASE/api/quota")
+echo "$USER_QUOTA" | grep -q '"limit":1000' && ok "登录配额 limit=1000（统一 finite 口径）" || bad "登录配额异常: $USER_QUOTA"
 
 # JSON file_path 分支门控（生产默认 403；本地 ALLOW_LOCAL=1 时跳过）
 CODE=$(curl -s -o /dev/null -w '%{http_code}' -H 'content-type: application/json' \
