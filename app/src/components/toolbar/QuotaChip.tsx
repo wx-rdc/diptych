@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import Popover from '../Popover';
-import { fetchQuota, type QuotaStatus } from '../../services/backend';
+import { fetchQuota, QUOTA_CHANGED_EVENT, type QuotaStatus } from '../../services/backend';
 
 interface Props {
   onLoginClick: () => void;
@@ -24,8 +24,22 @@ export default function QuotaChip({ onLoginClick, onViewUsage }: Props) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // v2.6.1：额度变化（翻译批次结束/402 熔断/登录登出）与回访时即时刷新，消除陈旧「剩余 N 页」
+  useEffect(() => {
+    const onFocus = () => refresh();
+    window.addEventListener(QUOTA_CHANGED_EVENT, refresh);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener(QUOTA_CHANGED_EVENT, refresh);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [refresh]);
+
   if (!quota) return null;
   const who = quota.anonymous ? '游客额度' : '每日额度';
+  const exhausted = quota.remaining === 0;
   return (
     <Popover
       panelTestId="quota-popover"
@@ -35,7 +49,7 @@ export default function QuotaChip({ onLoginClick, onViewUsage }: Props) {
           onClick={toggle}
           data-testid="quota-indicator"
           title={`${who}：已用 ${quota.used ?? 0} / ${quota.limit ?? 0} 页（每 24 小时滚动恢复）`}
-          className="flex h-6 shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 text-[11px] font-medium tabular-nums text-slate-500 hover:bg-slate-200"
+          className={`flex h-6 shrink-0 items-center gap-1 rounded-full px-2 text-[11px] font-medium tabular-nums hover:brightness-95 ${exhausted ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}
         >
           ◔ {quota.remaining}页
         </button>

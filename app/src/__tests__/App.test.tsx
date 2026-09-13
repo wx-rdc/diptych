@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
-import { BackendError, QuotaLimitError, parseDoc, translateDoc, fetchQuota as backendFetchQuota } from '../services/backend';
+import { BackendError, QuotaLimitError, parseDoc, translateDoc, fetchQuota as backendFetchQuota, QUOTA_CHANGED_EVENT } from '../services/backend';
 import { fetchMe } from '../services/auth';
 import type { GDocument, TranslateProgress, TranslatedDocument } from '../types';
 
@@ -139,6 +139,34 @@ describe('App 集成（mock backend，零点击流水线）', () => {
     await waitFor(() => {
       expect(screen.getByTestId('empty-error')).toHaveTextContent('文件不存在');
     });
+  });
+
+  it('解析进行中 → 顶栏下方解析横幅即时反馈（含文件名与阶段）', async () => {
+    vi.mocked(parseDoc).mockImplementation(() => new Promise(() => {}));
+    render(<App />);
+    const input = openSettingsPathInput();
+    fireEvent.change(input, { target: { value: '/tmp/slow.pdf' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    const banner = await screen.findByTestId('parsing-banner');
+    expect(banner.textContent).toContain('/tmp/slow.pdf');
+    expect(banner.textContent).toContain('上传');
+  });
+
+  it('额度耗尽 402 → 广播 quota-changed 事件（配额 Chip 刷新依据）', async () => {
+    const events: string[] = [];
+    const listener = (e: Event) => events.push(e.type);
+    window.addEventListener(QUOTA_CHANGED_EVENT, listener);
+    vi.mocked(parseDoc).mockRejectedValue(
+      new BackendError('游客 24 小时内最多翻译 5 页', 402, {
+        limit: 5, used: 5, required: 1, reset_at: 1770000000, user: false,
+      }),
+    );
+    render(<App />);
+    const input = openSettingsPathInput();
+    fireEvent.change(input, { target: { value: '/tmp/big.pdf' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(events).toContain(QUOTA_CHANGED_EVENT));
+    window.removeEventListener(QUOTA_CHANGED_EVENT, listener);
   });
 
   it('点击段落 → 两侧同 id 块高亮', async () => {

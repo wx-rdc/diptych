@@ -5,6 +5,7 @@ import {
   fetchDocument,
   cancelTranslate,
   retranslateParagraph,
+  notifyQuotaChanged,
   BackendError,
   QuotaLimitError,
   TranslateCancelledError,
@@ -78,11 +79,13 @@ export default function App() {
     setLoginOpen(false);
     setLoginHint(null);
     setError(null);
+    notifyQuotaChanged(); // 登录后口径切换（游客 5 页 → 用户 1000 页/24h）
   }, []);
 
   const handleLogout = useCallback(async () => {
     await logout();
     setUsername(null);
+    notifyQuotaChanged();
   }, []);
 
   const openLogin = useCallback((hint?: string) => {
@@ -101,6 +104,7 @@ export default function App() {
       // v2.5：额度耗尽 402（剩余 0，无已译内容）→ 额度卡片引导登录/等待恢复
       if (e instanceof BackendError && e.quota) {
         setLimitInfo(e.quota);
+        notifyQuotaChanged(); // 配额 Chip 即时反映耗尽态（v2.6.1）
         return;
       }
       const message = e instanceof Error ? e.message : String(e);
@@ -202,6 +206,8 @@ export default function App() {
         }
       } finally {
         setTranslating(false);
+        // 翻译批次结束（完成/熔断/取消）都可能增减已用额度——配额 Chip 依据此事件刷新
+        notifyQuotaChanged();
       }
     },
     [sourceLang, targetLang, filePath, reportError],
@@ -402,6 +408,19 @@ export default function App() {
         窗口较窄，已自动缩小字号；建议全屏使用获得最佳阅读体验
       </div>
 
+      {/* v2.6.1：解析反馈——零点击上传/解析可能耗时数分钟，旧文档完成态不再掩盖进行中的打开动作 */}
+      {pipeline.state.stage === 'parsing' ? (
+        <div
+          className="flex items-center gap-2 bg-blue-50 px-4 py-1.5 text-xs text-blue-700"
+          data-testid="parsing-banner"
+        >
+          <span className="tabular-nums">
+            正在打开 {filePath || '新文档'}：
+            {pipeline.state.parseProgress ? progressLabel(pipeline.state.parseProgress) : '上传中…'}
+          </span>
+        </div>
+      ) : null}
+
       {pdfViewerError ? (
         <div
           className="flex flex-wrap items-center gap-3 bg-red-50 px-4 py-1.5 text-xs text-red-700"
@@ -448,7 +467,7 @@ export default function App() {
       ) : (
         <main className="flex flex-1 flex-col items-center justify-center gap-2 text-slate-400">
           <div className="text-5xl">📄</div>
-          <p className="text-sm">点击「📁 选择文件」——自动解析并翻译，无需其他操作</p>
+          <p className="text-sm">点击「＋ 打开」选择 .docx / .pdf——自动解析并翻译，无需其他操作</p>
           {error ? (
             <p className="max-w-md text-sm text-red-500" data-testid="empty-error">
               {error}

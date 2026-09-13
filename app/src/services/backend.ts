@@ -107,6 +107,14 @@ export async function fetchQuota(): Promise<QuotaStatus> {
   return (await res.json()) as QuotaStatus;
 }
 
+/** v2.6.1：额度可能已变化的事件名（QuotaChip 监听并重新拉取） */
+export const QUOTA_CHANGED_EVENT = 'geminus:quota-changed';
+
+/** 额度可能变化时广播：翻译批次结束 / 402 熔断 / 登录登出 */
+export function notifyQuotaChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(QUOTA_CHANGED_EVENT));
+}
+
 /** v2.4 T5：取消进行中的翻译任务 */
 export async function cancelTranslate(docId: string): Promise<void> {
   const token = tokenOf(docId);

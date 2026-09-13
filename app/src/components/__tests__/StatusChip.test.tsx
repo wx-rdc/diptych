@@ -91,4 +91,19 @@ describe('StatusChip（状态单一出口）', () => {
     expect(screen.queryByTestId('status-popover')).toBeNull();
     expect(base.onRetranslate).toHaveBeenCalledOnce();
   });
+
+  it('打开新文档解析中 → 优先于上一份文档的完成态（否则用户看不到任何反馈）', () => {
+    chip({ done: true, stats: { done: 46, cached: 0, errors: 0 }, parseLabel: '上传片段 1/2…' });
+    const el = screen.getByTestId('status-chip');
+    expect(el.dataset.state).toBe('parsing');
+    expect(el.textContent).toContain('解析中');
+  });
+
+  it('翻译刚启动（进度总数未到）显示「翻译中」而非 0/0', () => {
+    chip({ translating: true, current: 0, total: 0 });
+    const el = screen.getByTestId('status-chip');
+    expect(el.dataset.state).toBe('translating');
+    expect(el.textContent).toContain('翻译中');
+    expect(el.textContent).not.toContain('0/0');
+  });
 });

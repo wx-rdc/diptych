@@ -25,23 +25,25 @@ type State = 'parsing' | 'translating' | 'paused' | 'warning' | 'done';
  * （原底部信息栏 4 个技术计数 + TranslateControl 的停止/继续/重译全部收编于此）
  */
 export default function StatusChip(p: Props) {
+  // v2.6.1：parsing 优先于 paused/done——打开新文档时上一份的完成态不得掩盖解析反馈
   const state: State | null = p.translating
     ? 'translating'
-    : p.paused
-      ? 'paused'
-      : p.done
-        ? p.stats.errors > 0 ? 'warning' : 'done'
-        : p.parseLabel
-          ? 'parsing'
+    : p.parseLabel
+      ? 'parsing'
+      : p.paused
+        ? 'paused'
+        : p.done
+          ? p.stats.errors > 0 ? 'warning' : 'done'
           : null;
   if (!state) return null; // 空闲不占位（切换文档的瞬态）
 
   const label =
-    state === 'translating' ? `⟳ ${p.current}/${p.total}` :
-    state === 'parsing' ? '⟳ 解析中' :
-    state === 'paused' ? '⏸ 已暂停' :
-    state === 'warning' ? `⚠ ${p.stats.errors} 段` :
-    '✓';
+    state === 'translating'
+      ? p.total > 0 ? `⟳ ${p.current}/${p.total}` : '⟳ 翻译中'
+    : state === 'parsing' ? '⟳ 解析中'
+    : state === 'paused' ? '⏸ 已暂停'
+    : state === 'warning' ? `⚠ ${p.stats.errors} 段`
+    : '✓';
 
   const tone =
     state === 'done' ? 'bg-emerald-50 text-emerald-600' :

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import QuotaChip from '../toolbar/QuotaChip';
+import { QUOTA_CHANGED_EVENT } from '../../services/backend';
 import * as backend from '../../services/backend';
 
 vi.mock('../../services/backend', async (importOriginal) => ({
@@ -61,5 +62,25 @@ describe('QuotaChip（五碎片收敛为一个 Chip + Popover）', () => {
     const { container } = render(<QuotaChip onLoginClick={onLoginClick} />);
     await waitFor(() => expect(backend.fetchQuota).toHaveBeenCalled());
     expect(container.firstChild).toBeNull();
+  });
+
+  it('额度变化事件 → 重新拉取（翻译消耗后 Chip 即时更新，无需刷新页面）', async () => {
+    vi.mocked(backend.fetchQuota)
+      .mockResolvedValueOnce({ anonymous: true, unlimited: false, limit: 5, used: 0, remaining: 5 })
+      .mockResolvedValue({ anonymous: true, unlimited: false, limit: 5, used: 5, remaining: 0 });
+    render(<QuotaChip onLoginClick={onLoginClick} />);
+    await waitFor(() => expect(screen.getByTestId('quota-indicator').textContent).toContain('5页'));
+    act(() => {
+      window.dispatchEvent(new Event(QUOTA_CHANGED_EVENT));
+    });
+    await waitFor(() => expect(screen.getByTestId('quota-indicator').textContent).toContain('0页'));
+    expect(vi.mocked(backend.fetchQuota).mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('额度用尽（remaining=0）→ 琥珀警示态', async () => {
+    vi.mocked(backend.fetchQuota).mockResolvedValue({ anonymous: true, unlimited: false, limit: 5, used: 5, remaining: 0 });
+    render(<QuotaChip onLoginClick={onLoginClick} />);
+    await waitFor(() => expect(screen.getByTestId('quota-indicator')).toBeInTheDocument());
+    expect(screen.getByTestId('quota-indicator').className).toContain('amber');
   });
 });
