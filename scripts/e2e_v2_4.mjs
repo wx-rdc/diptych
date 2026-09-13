@@ -88,18 +88,17 @@ try {
   });
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 
-  // ── 1. 匿名拦截（前端）：上传 simple.pdf → 点打开 → 登录框 + 无 /api/parse 请求 ──
+  // ── 1. 匿名零点击（v2.6）：上传 simple.pdf → 自动解析 → 401 → 自动弹登录框 ──
   {
-    let parseRequested = false;
-    const onRequest = (req) => { if (req.url().includes('/api/parse')) parseRequested = true; };
-    page.on('request', onRequest);
+    let parseStatus = null;
+    const onResponse = (res) => { if (res.url().includes('/api/parse')) parseStatus = res.status(); };
+    page.on('response', onResponse);
     await page.goto(BASE);
     await page.setInputFiles('[data-testid="upload-input"]', `${FIX}/pdf/simple.pdf`);
-    await page.getByTestId('open-btn').click();
     const dialogVisible = await page.getByTestId('login-overlay').waitFor({ timeout: 5000 }).then(() => true).catch(() => false);
-    log('未登录点「打开」→ 弹登录框', dialogVisible);
-    log('拦截发生在前端（无 /api/parse 请求发出）', !parseRequested);
-    page.off('request', onRequest);
+    log('匿名上传零点击 → 自动弹登录框', dialogVisible);
+    log('匿名 /api/parse → 401（服务端门禁）', parseStatus === 401, `status=${parseStatus}`);
+    page.off('response', onResponse);
   }
 
   // ── 2. 匿名 API 门禁（后端）：上传外壳化 + 查看/翻译 401 ──
@@ -124,14 +123,15 @@ try {
     log('匿名 GET /api/history → 401', h0.status === 401, `status=${h0.status}`);
   }
 
-  // ── 3. 登录 + 上传（登录续跑 pending action）→ viewer 出现 ──
+  // ── 3. 登录 + 重新选择文件（零点击自动续跑：解析+翻译自动开始）→ viewer 出现 ──
   {
     await page.getByTestId('login-username').fill(cred.user);
     await page.getByTestId('login-password').fill(cred.pass);
     await page.getByTestId('login-submit').click();
     await page.getByTestId('auth-username').waitFor({ timeout: 5000 });
     log('登录成功（用户名徽章出现）', true, `user=${cred.user}`);
-    // 登录续跑：pending 打开动作自动执行（拦截时已选 simple.pdf）
+    // v2.6：零点击无 pending 续跑——登录后重新选择文件即自动打开
+    await page.setInputFiles('[data-testid="upload-input"]', `${FIX}/pdf/simple.pdf`);
     const viewer = await Promise.race([
       page.getByTestId('pdf-compare-view').waitFor({ timeout: 30000 }).then(() => 'pdf'),
       page.getByTestId('document-viewer').waitFor({ timeout: 30000 }).then(() => 'text'),
@@ -166,7 +166,6 @@ try {
   // ── 4.5 换长文档（rich.docx）：交互断言需要可滚动内容 ──
   {
     await page.setInputFiles('[data-testid="upload-input"]', `${FIX}/rich.docx`);
-    await page.getByTestId('open-btn').click();
     // viewer testid 在文档切换间不卸载 → 轮询左栏真正可滚动为止
     let scrollable = 0;
     for (let i = 0; i < 40; i++) {

@@ -53,8 +53,8 @@ function rightPane() {
 // ── 1. IEEE 文档离线重放打开（B3 母本）+ 左栏 worker inline 渲染（P0）──
 {
   await page.goto(BASE);
-  await page.getByTestId('file-path-input').fill(IEEE);
-  await page.getByTestId('open-btn').click();
+  // v2.6：零点击——选择文件即自动「解析 → 翻译」
+  await page.setInputFiles('[data-testid="upload-input"]', IEEE);
   await page.getByTestId('pdf-compare-view').waitFor({ timeout: 300000 });
   await page.waitForTimeout(1500);
   const docId = capturedDocId;

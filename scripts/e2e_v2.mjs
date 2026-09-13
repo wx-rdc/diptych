@@ -1,5 +1,6 @@
 /**
  * 浏览器端到端验证（v2 T11）：MinerU 解析 + 原始渲染 + 区域映射 + 模式切换 + DOCX 回归。
+ * v2.6 slim toolbar 适配：零点击上传（upload-input）+ status-chip 完成态（translate-btn/open-btn 已移除）。
  * 前置：release 服务器已在 127.0.0.1:39321 运行（app/dist 静态托管，.env.local 有双 Token）。
  * 运行：NODE_PATH=$(npm root -g) node scripts/e2e_v2.mjs
  */
@@ -22,10 +23,19 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
 async function openDocAndWait(path, mode = 'original') {
   await page.goto(BASE);
-  await page.getByTestId('file-path-input').fill(path);
-  await page.getByTestId('open-btn').click();
+  // v2.6：零点击——选择文件即自动「解析 → 翻译」
+  await page.setInputFiles('[data-testid="upload-input"]', path);
   const testid = mode === 'original' ? 'pdf-compare-view' : 'document-viewer';
   await page.getByTestId(testid).waitFor({ timeout: 300000 });
+}
+
+/** 等待翻译完成（v2.6：status-chip 完成态 done/⚠ warning，替代旧进度条 100% 文案） */
+async function waitTranslateDone(timeout = 180000) {
+  await page.waitForFunction(
+    () => ['done', 'warning'].includes(document.querySelector('[data-testid="status-chip"]')?.dataset.state ?? ''),
+    null,
+    { timeout },
+  );
 }
 
 /** 等待条件成立（懒渲染异步：canvas/区域在 IO 回调后出现） */
@@ -47,9 +57,8 @@ const regionCount = await waitCount('[data-testid^="region-b_"]', 3);
 log('区域叠加层渲染', regionCount >= 3, `regions=${regionCount}`);
 await page.screenshot({ path: 'docs/screenshots/v2-original-mode.png', fullPage: false });
 
-// ── 2. 真实 API 翻译（en→zh，短段合并）──
-await page.getByTestId('translate-btn').click();
-await page.getByText('100%', { exact: false }).first().waitFor({ timeout: 180000 });
+// ── 2. 真实 API 翻译（en→zh，短段合并；零点击自动开始）──
+await waitTranslateDone();
 await page.waitForTimeout(500);
 const zhCount = await page.evaluate(() => {
   const panes = document.querySelectorAll('[data-testid="pdf-compare-view"] .geminus-pane');
@@ -98,8 +107,7 @@ log('3 页 PDF 拆分解析+合并（2 片段）', bigPages >= 3 && bigRegions >
 await openDocAndWait(new URL('../test/fixtures/rich.docx', import.meta.url).pathname, 'text');
 const toggleHidden = await page.getByTestId('render-mode-toggle').count();
 log('DOCX 文本模式正常（无模式切换按钮）', toggleHidden === 0, `toggle=${toggleHidden}`);
-await page.getByTestId('translate-btn').click();
-await page.getByText('100%', { exact: false }).first().waitFor({ timeout: 180000 });
+await waitTranslateDone();
 await page.waitForTimeout(400);
 const docxZh = await page.evaluate(() => {
   const panes = document.querySelectorAll('[data-testid="document-viewer"] .geminus-pane');

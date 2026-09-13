@@ -34,10 +34,21 @@ page.on('request', (req) => {
 
 async function openDocAndWait(path, mode = 'original') {
   await page.goto(BASE);
-  await page.getByTestId('file-path-input').fill(path);
-  await page.getByTestId('open-btn').click();
+  // v2.6：零点击——选择文件即自动「解析 → 翻译」
+  await page.setInputFiles('[data-testid="upload-input"]', path);
   const testid = mode === 'original' ? 'pdf-compare-view' : 'document-viewer';
   await page.getByTestId(testid).waitFor({ timeout: 300000 });
+}
+
+/** 等待翻译完成（v2.6：status-chip 完成态，替代旧 progress-text 100%） */
+async function waitTranslateDone(timeout = 900000) {
+  await page
+    .waitForFunction(
+      () => ['done', 'warning'].includes(document.querySelector('[data-testid="status-chip"]')?.dataset.state ?? ''),
+      { timeout },
+    )
+    .catch(() => {});
+  return await page.evaluate(() => document.querySelector('[data-testid="status-chip"]')?.dataset.state ?? '');
 }
 
 async function waitCount(selector, min, timeout = 20000) {
@@ -262,22 +273,15 @@ let docId = null;
   log('按钮不覆盖滚动条', !!btn && btn.notOverScrollbar);
 }
 
-// ── 9. 翻译链路冒烟（真实 LLM，b2 合并 chunk + 算法行级） ──
+// ── 9. 翻译链路冒烟（真实 LLM，b2 合并 chunk + 算法行级；零点击自动开始） ──
 {
-  await page.getByTestId('translate-btn').click();
-  await page
-    .waitForFunction(
-      () => document.querySelector('[data-testid="progress-text"]')?.textContent?.includes('100%'),
-      { timeout: 900000 },
-    )
-    .catch(() => {});
-  const stat = await page.evaluate(() => document.querySelector('[data-testid="progress-text"]')?.textContent ?? '');
+  const state = await waitTranslateDone();
   const zhChars = await page.evaluate(() => {
     const panes = document.querySelectorAll('.geminus-pane');
     const right = panes[panes.length - 1];
     return (right.innerText.match(/[\u4e00-\u9fff]/g) ?? []).length;
   });
-  log('b2 翻译完成（100%）', stat.includes('100%'), stat);
+  log('b2 翻译完成（status-chip done/warning）', state === 'done' || state === 'warning', `state=${state}`);
   log('译文含 ≥500 中文字符', zhChars >= 500, `zh=${zhChars}`);
   // 覆盖度在翻译后仍守恒（IR 未变）
   const r2 = await fetch(`${BASE}/api/debug/coverage?doc_id=${docId}`).then((x) => x.json());
@@ -311,18 +315,12 @@ let docId = null;
 // ── 11. DOCX 回归（rich.docx 文本模式） ──
 {
   await openDocAndWait(`${FIX}/rich.docx`, 'text');
-  await page.getByTestId('translate-btn').click();
-  await page
-    .waitForFunction(
-      () => document.querySelector('[data-testid="progress-text"]')?.textContent?.includes('100%'),
-      { timeout: 300000 },
-    )
-    .catch(() => {});
+  const state = await waitTranslateDone(300000);
   const zh = await page.evaluate(() => {
     const panes = document.querySelectorAll('.geminus-pane');
     return (panes[panes.length - 1].innerText.match(/[\u4e00-\u9fff]/g) ?? []).length;
   });
-  log('DOCX 回归（rich.docx 翻译链路）', zh > 100, `zh=${zh}`);
+  log('DOCX 回归（rich.docx 翻译链路）', zh > 100 && (state === 'done' || state === 'warning'), `zh=${zh} state=${state}`);
 }
 
 await browser.close();

@@ -24,10 +24,19 @@ const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 
 async function openDocAndWait(path, mode = 'original') {
   await page.goto(BASE);
-  await page.getByTestId('file-path-input').fill(path);
-  await page.getByTestId('open-btn').click();
+  // v2.6：零点击——选择文件即自动「解析 → 翻译」
+  await page.setInputFiles('[data-testid="upload-input"]', path);
   const testid = mode === 'original' ? 'pdf-compare-view' : 'document-viewer';
   await page.getByTestId(testid).waitFor({ timeout: 300000 });
+}
+
+/** 等待翻译完成（v2.6：status-chip 完成态，替代旧 TranslateControl「已完成」文案） */
+async function waitTranslateDone(timeout = 180000) {
+  await page.waitForFunction(
+    () => ['done', 'warning'].includes(document.querySelector('[data-testid="status-chip"]')?.dataset.state ?? ''),
+    null,
+    { timeout },
+  ).catch(() => {});
 }
 
 async function waitCount(selector, min, timeout = 20000) {
@@ -88,12 +97,15 @@ const fs0 = await page.evaluate(() => {
   return getComputedStyle(el).fontSize;
 });
 log('默认阅读字号 ≥18px', parseFloat(fs0) >= 18, `fontSize=${fs0}`);
+// v2.6：字号控件收进 ⚙ 设置弹层
+await page.getByTestId('settings-btn').click();
 await page.locator('button[aria-label="增大字号"]').click();
 const fs1 = await page.evaluate(
   () => document.documentElement.style.getPropertyValue('--geminus-user-fs'),
 );
 log('A+ 升档到 20px', fs1 === '20px', `--geminus-user-fs=${fs1}`);
 await page.reload();
+await page.getByTestId('settings-btn').click();
 await page.getByTestId('font-size-control').waitFor({ timeout: 20000 });
 const fs2 = await page.evaluate(
   () => document.documentElement.style.getPropertyValue('--geminus-user-fs'),
@@ -105,8 +117,7 @@ await page.locator('button[aria-label="减小字号"]').click();
 // ── 3. 翻译（缓存命中为主）+ 块数对齐（T1.6）──
 // （场景 2 reload 后回到空态，需重新打开文档）
 await openDocAndWait(`${FIX}/pdf/simple.pdf`);
-await page.getByTestId('translate-btn').click();
-await page.getByText('已完成', { exact: false }).first().waitFor({ timeout: 180000 }).catch(() => {});
+await waitTranslateDone();
 await page.waitForTimeout(600);
 const blockCounts = await page.evaluate(() => {
   const panes = document.querySelectorAll('[data-testid="pdf-compare-view"] .geminus-pane');
@@ -152,7 +163,7 @@ log('页码标签：右栏组分隔线', dividers >= 1, `dividers=${dividers}`);
 // ── 6. 表格富渲染（with_table.pdf：MinerU 表格 HTML + 截图）──
 await openDocAndWait(`${FIX}/pdf/with_table.pdf`);
 await waitCount('[data-testid^="table-card-"]', 1);
-await page.getByTestId('translate-btn').click();
+await waitTranslateDone();
 await page.waitForTimeout(800);
 const tableInfo = await page.evaluate(() => {
   const right = document.querySelectorAll('[data-testid="pdf-compare-view"] .geminus-pane')[1];
@@ -197,8 +208,7 @@ await page.screenshot({ path: 'docs/screenshots/v2.1/table-card.png', fullPage: 
 
 // ── 8. 行内公式（b2 论文 3.1 节，解析+翻译缓存）──
 await openDocAndWait(new URL('../test/b2_Prototypical_Networks.pdf', import.meta.url).pathname);
-await page.getByTestId('translate-btn').click();
-await page.getByText('已完成', { exact: false }).first().waitFor({ timeout: 300000 }).catch(() => {});
+await waitTranslateDone(300000);
 await page.waitForTimeout(800);
 const mathInfo = await page.evaluate(() => {
   const right = document.querySelectorAll('[data-testid="pdf-compare-view"] .geminus-pane')[1];
