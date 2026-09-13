@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import SettingsPopover from '../toolbar/SettingsPopover';
 
@@ -50,10 +51,15 @@ describe('SettingsPopover（字号/语言对/开发路径收纳）', () => {
   });
 
   it('开发小节：本地路径输入 Enter 触发 onParseLocal', () => {
-    open();
+    // 受控输入需真实状态流（mock onChange 不重渲染，React 会回滚 DOM 值）
+    function Host() {
+      const [devPath, setDevPath] = useState('');
+      return <SettingsPopover {...base} devPath={devPath} onDevPathChange={setDevPath} />;
+    }
+    render(<Host />);
+    fireEvent.click(screen.getByTestId('settings-btn'));
     const input = screen.getByTestId('file-path-input');
     fireEvent.change(input, { target: { value: '/tmp/a.pdf' } });
-    expect(base.onDevPathChange).toHaveBeenCalledWith('/tmp/a.pdf');
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(base.onParseLocal).toHaveBeenCalledOnce();
   });
