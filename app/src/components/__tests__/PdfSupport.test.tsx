@@ -38,26 +38,19 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe('DocumentViewer 文件类型徽章（T10.2）', () => {
-  it('fileType=pdf 时显示 PDF 徽章', () => {
-    render(<DocumentViewer doc={pdfDoc} translatedMap={{}} activeId={null} onSelect={() => {}} fileType="pdf" />);
-    const badges = screen.getAllByTestId('file-type-badge');
-    expect(badges).toHaveLength(1); // 仅原文栏
-    expect(badges[0]).toHaveTextContent('PDF');
+describe('DocumentViewer 栏头极简（v2.6）', () => {
+  it('浮标：原文/译文（不占布局高度）', () => {
+    render(<DocumentViewer doc={pdfDoc} translatedMap={{}} activeId={null} onSelect={() => {}} />);
+    expect(screen.getAllByTestId('pane-label').map((e) => e.textContent)).toEqual(['原文', '译文']);
   });
 
-  it('fileType=docx 时显示 DOCX 徽章', () => {
-    render(<DocumentViewer doc={pdfDoc} translatedMap={{}} activeId={null} onSelect={() => {}} fileType="docx" />);
-    expect(screen.getByTestId('file-type-badge')).toHaveTextContent('DOCX');
-  });
-
-  it('fileType 缺省时不显示徽章', () => {
+  it('Pane 不再渲染类型徽章（迁至顶栏文档身份区）', () => {
     render(<DocumentViewer doc={pdfDoc} translatedMap={{}} activeId={null} onSelect={() => {}} />);
     expect(screen.queryByTestId('file-type-badge')).toBeNull();
   });
 
   it('PDF 文档块序列完整渲染（标题/列表/图片占位/空段）', () => {
-    render(<DocumentViewer doc={pdfDoc} translatedMap={{}} activeId={null} onSelect={() => {}} fileType="pdf" />);
+    render(<DocumentViewer doc={pdfDoc} translatedMap={{}} activeId={null} onSelect={() => {}} />);
     // 双栏各一次
     expect(screen.getAllByText('A Two Column Study').length).toBe(2);
     expect(screen.getAllByText('• a bullet from pdf').length).toBe(2);

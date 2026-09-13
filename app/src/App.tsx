@@ -436,7 +436,6 @@ export default function App() {
         ) : (
           <DocumentViewer
             doc={doc}
-            fileType={fileType}
             translatedMap={translatedMap}
             activeId={activeId}
             onSelect={setActiveId}

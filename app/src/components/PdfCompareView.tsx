@@ -91,7 +91,7 @@ export default function PdfCompareView({
 
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="pdf-compare-view">
-      <Pane title="原文（原始渲染）" subtitle={doc.title} badge="PDF" containerRef={leftRef}>
+      <Pane label="原文" containerRef={leftRef}>
         <PdfOriginalViewer
           doc={doc}
           url={originalPdfUrl(doc.id)}
@@ -109,7 +109,7 @@ export default function PdfCompareView({
 
       <div className="w-px bg-slate-200" />
 
-      <Pane title="译文" subtitle="翻译后" containerRef={rightRef}>
+      <Pane label="译文" containerRef={rightRef}>
         {translatedBlocks.map((block, i) => {
           const page = blockPage(block.id);
           const prev = i > 0 ? blockPage(translatedBlocks[i - 1].id) : null;

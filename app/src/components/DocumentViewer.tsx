@@ -10,8 +10,6 @@ interface Props {
   translatedMap: Record<string, Block | null>;
   activeId: string | null;
   onSelect: (blockId: string) => void;
-  /** 来源文件类型（徽章显示；null 不显示） */
-  fileType?: 'docx' | 'pdf' | null;
   originalRef?: React.RefObject<HTMLDivElement>;
   translatedRef?: React.RefObject<HTMLDivElement>;
   /** v2.1：翻译失败回退原文的块（右栏「未翻译」徽标） */
@@ -21,13 +19,13 @@ interface Props {
 }
 
 /** 双栏对照视图：左原文 / 右译文，占位符保位。
- * v2.4：同步由 useHoverDrivenSync 接管（Hover 主从 + 锚点居中追踪）。 */
+ * v2.4：同步由 useHoverDrivenSync 接管（Hover 主从 + 锚点居中追踪）。
+ * v2.6：栏头移除——浮标由 Pane 渲染，类型徽章在顶栏文档身份区。 */
 export default function DocumentViewer({
   doc,
   translatedMap,
   activeId,
   onSelect,
-  fileType,
   originalRef,
   translatedRef,
   fallbackIds,
@@ -41,11 +39,10 @@ export default function DocumentViewer({
   useHoverDrivenSync(leftRef, rightRef);
 
   const translatedBlocks = doc.blocks.map((b) => translatedMap[b.id] || b);
-  const badge = fileType ? fileType.toUpperCase() : null;
 
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="document-viewer">
-      <Pane title="原文" subtitle={doc.title} badge={badge} containerRef={leftRef}>
+      <Pane label="原文" containerRef={leftRef}>
         {doc.blocks.map((block) => (
           <BlockRenderer
             key={block.id}
@@ -60,7 +57,7 @@ export default function DocumentViewer({
 
       <div className="w-px bg-slate-200" />
 
-      <Pane title="译文" subtitle="翻译后" containerRef={rightRef}>
+      <Pane label="译文" containerRef={rightRef}>
         {translatedBlocks.map((block) => (
           <BlockRenderer
             key={block.id}

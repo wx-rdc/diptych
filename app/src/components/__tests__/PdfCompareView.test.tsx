@@ -89,6 +89,8 @@ describe('PdfCompareView（mock pdfjs）', () => {
     // 页容器出现（jsdom 无 IntersectionObserver → 直接渲染）
     const page = await waitFor(() => screen.getByTestId('pdf-page-1'));
     expect(page).toBeTruthy();
+    // v2.6 栏头极简：浮标 原文/译文（不占布局高度）
+    expect(screen.getAllByTestId('pane-label').map((e) => e.textContent)).toEqual(['原文', '译文']);
     // 译文侧两个块
     expect(screen.getByText('First paragraph')).toBeTruthy();
     expect(screen.getByText('Second paragraph')).toBeTruthy();
