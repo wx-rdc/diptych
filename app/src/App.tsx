@@ -3,6 +3,8 @@ import type { Block, GDocument, RenderMode, TranslateProgress } from './types';
 import {
   translateDoc,
   fetchDocument,
+  cancelTranslate,
+  retranslateParagraph,
   BackendError,
   QuotaLimitError,
   TranslateCancelledError,
@@ -10,14 +12,13 @@ import {
 } from './services/backend';
 import { fetchMe, logout } from './services/auth';
 import { fetchHistory, type HistoryItem } from './services/history';
-import Toolbar from './components/Toolbar';
-import StatusBar from './components/StatusBar';
+import ToolbarSlim, { progressLabel } from './components/toolbar/ToolbarSlim';
+import Toast from './components/Toast';
 import DocumentViewer from './components/DocumentViewer';
 import PdfCompareView from './components/PdfCompareView';
 import LoginDialog from './components/LoginDialog';
 import HistoryPanel from './components/HistoryPanel';
 import QuotaExceededCard from './components/QuotaExceededCard';
-import TranslateControl from './components/TranslateControl';
 import GuestDocsPanel from './components/GuestDocsPanel';
 import { recordGuestDoc } from './services/guestDocs';
 import type { ParagraphToolbarInteractive } from './components/BlockRenderer';
@@ -265,9 +266,9 @@ export default function App() {
     [applyDoc, runTranslate, reportError],
   );
 
-  // v2.1 T7.2：单段重译回填（工具条回调）
+  // v2.1 T7.2：单段重译回填（工具条/重试失败段共用）
   const handleRetranslated = useCallback(
-    ({ blockId, block, fallback }: { blockId: string; block: Block; fallback: boolean }) => {
+    ({ blockId, block, fallback }: { blockId: string; block: Block | null; fallback: boolean }) => {
       setTranslatedMap((prev) => ({ ...prev, [blockId]: block }));
       setFallbackIds((prev) => {
         const next = new Set(prev);
@@ -278,6 +279,31 @@ export default function App() {
     },
     [],
   );
+
+  // slim toolbar：停止翻译（原 TranslateControl 内逻辑上移；状态切换由 SSE cancelled 事件驱动）
+  const handleStopTranslate = useCallback(async () => {
+    if (!doc) return;
+    try {
+      await cancelTranslate(doc.id);
+    } catch {
+      /* 暂停态由 SSE cancelled → TranslateCancelledError → paused 链路保证 */
+    }
+  }, [doc]);
+
+  // slim toolbar：仅重译失败回退的段（retranslateParagraph 逐段；区别于整跑 translateDoc 的重新翻译全文）
+  const handleRetryFailed = useCallback(async () => {
+    if (!doc) return;
+    for (const id of fallbackIds) {
+      try {
+        const pair = await retranslateParagraph(doc.id, id, sourceLang, targetLang);
+        const orig = doc.blocks.find((b) => b.id === id) ?? null;
+        handleRetranslated({ blockId: pair.block_id, block: pair.translated ?? orig, fallback: pair.fallback ?? false });
+        setStats((s) => ({ ...s, errors: Math.max(0, s.errors - 1), done: s.done + 1 }));
+      } catch {
+        /* 失败保留原状，可再次重试 */
+      }
+    }
+  }, [doc, fallbackIds, sourceLang, targetLang, handleRetranslated]);
 
   // v2.4 T2：打开/关闭历史面板（打开时拉取列表）
   const openHistory = useCallback(async () => {
@@ -335,29 +361,42 @@ export default function App() {
 
   return (
     <div className="relative flex h-full flex-col bg-slate-100 text-slate-800">
-      <Toolbar
-        filePath={filePath}
-        onFilePathChange={handleFilePathChange}
-        onParseLocal={handleParseLocal}
-        parseProgress={pipeline.state.parseProgress}
+      <ToolbarSlim
+        docTitle={doc ? filePath || doc.title : null}
+        fileType={doc ? fileType : null}
+        onPickFile={handlePickFile}
+        parseLabel={pipeline.state.parseProgress ? progressLabel(pipeline.state.parseProgress) : null}
+        translating={translating}
+        paused={paused}
+        done={lastDone}
+        stats={stats}
+        progressCurrent={progress?.current ?? 0}
+        progressTotal={progress?.total ?? 0}
+        onStopTranslate={handleStopTranslate}
+        onContinueTranslate={() => doc && runTranslate(doc)}
+        onRetryFailed={handleRetryFailed}
+        onRetranslate={() => doc && runTranslate(doc)}
         renderMode={renderMode}
         onRenderModeChange={setRenderMode}
         canToggleRenderMode={!!doc?.pdf_meta && fileType === 'pdf'}
-        docTitle={doc?.title ?? null}
+        fontSize={fontSize}
+        onFontIncrease={fontIncrease}
+        onFontDecrease={fontDecrease}
         sourceLang={sourceLang}
         targetLang={targetLang}
         onSourceLangChange={setSourceLang}
         onTargetLangChange={setTargetLang}
-        fontSize={fontSize}
-        onFontIncrease={fontIncrease}
-        onFontDecrease={fontDecrease}
-        onPickFile={handlePickFile}
+        devPath={filePath}
+        onDevPathChange={handleFilePathChange}
+        onParseLocal={handleParseLocal}
         username={username}
         onLoginClick={() => openLogin()}
         onLogoutClick={handleLogout}
         onHistoryClick={username ? openHistory : undefined}
         onViewUsage={!username ? () => setGuestDocsOpen(true) : undefined}
       />
+
+      <Toast message={error} onDismiss={() => setError(null)} />
 
       <div className="narrow-hint items-center justify-center gap-2 bg-amber-50 px-4 py-1 text-xs text-amber-700">
         窗口较窄，已自动缩小字号；建议全屏使用获得最佳阅读体验
@@ -418,21 +457,6 @@ export default function App() {
           ) : null}
         </main>
       )}
-
-      <StatusBar progress={progress} translating={translating} stats={stats} error={error} />
-
-      {/* v2.4 T5/T6：翻译控制（进度 + 停止/继续/重新翻译） */}
-      {doc ? (
-        <TranslateControl
-          doc={doc}
-          translating={translating}
-          paused={paused}
-          done={lastDone}
-          progress={progress}
-          onContinue={() => doc && runTranslate(doc)}
-          onRetranslate={() => doc && runTranslate(doc)}
-        />
-      ) : null}
 
       {/* v2.5：额度引导卡片（部分处理熔断有已译部分；额度耗尽 402 无） */}
       {limitInfo ? (

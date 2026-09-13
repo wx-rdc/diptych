@@ -72,13 +72,19 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+/** 经 ⚙ 设置弹层打开本地路径输入（开发分支迁入 Popover 后的统一入口） */
+function openSettingsPathInput() {
+  fireEvent.click(screen.getByTestId('settings-btn'));
+  return screen.getByTestId('file-path-input');
+}
+
 /**
  * v2.4 T3 零点击：输入本地路径 + Enter → 自动解析（+自动翻译挂起）。
- * 「打开」按钮已移除——Enter 是本地路径开发分支的流水线触发方式。
+ * v2.6 slim toolbar：路径输入位于 ⚙ 设置弹层内。
  */
 async function openDoc(path = '/tmp/test.docx') {
   render(<App />);
-  const input = screen.getByTestId('file-path-input');
+  const input = openSettingsPathInput();
   fireEvent.change(input, { target: { value: path } });
   fireEvent.keyDown(input, { key: 'Enter' });
   // 双栏各渲染一次原文
@@ -105,7 +111,7 @@ describe('App 集成（mock backend，零点击流水线）', () => {
       },
     );
     render(<App />);
-    const input = screen.getByTestId('file-path-input');
+    const input = openSettingsPathInput();
     fireEvent.change(input, { target: { value: '/tmp/test.docx' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
@@ -115,16 +121,19 @@ describe('App 集成（mock backend，零点击流水线）', () => {
     });
     expect(screen.getAllByText('Machine learning is fun.').length).toBe(1);
     expect(screen.getAllByAltText('fig').length).toBe(2);
-    expect(screen.getByText('✅ 完成 1')).toBeInTheDocument();
-    expect(screen.getByText('💾 缓存命中 1')).toBeInTheDocument();
-    expect(screen.getByTestId('progress-text')).toHaveTextContent('100%');
+    // 状态收敛进 StatusChip（点击展开 Popover 断言计数）
+    const chip = screen.getByTestId('status-chip');
+    await waitFor(() => expect(chip.dataset.state).toBe('done'));
+    fireEvent.click(chip);
+    expect(screen.getByTestId('status-popover').textContent).toContain('完成 1');
+    expect(screen.getByTestId('status-popover').textContent).toContain('缓存 1');
     expect(translateDoc).toHaveBeenCalledWith('d1', 'en', 'zh', expect.any(Function));
   });
 
   it('解析失败 → 错误提示', async () => {
     vi.mocked(parseDoc).mockRejectedValue(new Error('文件不存在'));
     render(<App />);
-    const input = screen.getByTestId('file-path-input');
+    const input = openSettingsPathInput();
     fireEvent.change(input, { target: { value: '/nope.docx' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => {
@@ -135,7 +144,7 @@ describe('App 集成（mock backend，零点击流水线）', () => {
   it('点击段落 → 两侧同 id 块高亮', async () => {
     vi.mocked(parseDoc).mockResolvedValue(doc);
     const { container } = render(<App />);
-    const input = screen.getByTestId('file-path-input');
+    const input = openSettingsPathInput();
     fireEvent.change(input, { target: { value: '/tmp/t.docx' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(screen.getAllByText('Introduction').length).toBe(2));
@@ -154,7 +163,8 @@ describe('App 集成（mock backend，零点击流水线）', () => {
   it('匿名状态 → 工具栏显示登录按钮；点击打开登录对话框', async () => {
     render(<App />);
     expect(screen.getByTestId('login-btn')).toBeInTheDocument();
-    expect(screen.getByTestId('anon-hint')).toHaveTextContent('游客模式');
+    // v2.6：「游客模式/额度内免登录」碎片文字已收敛进配额 Popover（顶栏不再常驻）
+    expect(screen.queryByTestId('anon-hint')).toBeNull();
     fireEvent.click(screen.getByTestId('login-btn'));
     await waitFor(() => expect(screen.getByTestId('login-dialog')).toBeInTheDocument());
   });
@@ -181,7 +191,7 @@ describe('v2.5 配额与权限引导', () => {
       }),
     );
     render(<App />);
-    const input = screen.getByTestId('file-path-input');
+    const input = openSettingsPathInput();
     fireEvent.change(input, { target: { value: '/tmp/big.pdf' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(screen.getByTestId('quota-exceeded-card')).toBeInTheDocument());
@@ -200,7 +210,7 @@ describe('v2.5 配额与权限引导', () => {
       new QuotaLimitError({ limit: 5, used: 5, required: 1, translated_pages: 2 }),
     );
     render(<App />);
-    const input = screen.getByTestId('file-path-input');
+    const input = openSettingsPathInput();
     fireEvent.change(input, { target: { value: '/tmp/big11pages.pdf' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     // 不再被本地预检挡住：parseDoc 正常发起
@@ -215,7 +225,7 @@ describe('v2.5 配额与权限引导', () => {
       new BackendError('请登录后查看与翻译文档', 401),
     );
     render(<App />);
-    const input = screen.getByTestId('file-path-input');
+    const input = openSettingsPathInput();
     fireEvent.change(input, { target: { value: '/tmp/x.docx' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(screen.getByTestId('login-dialog')).toBeInTheDocument());
@@ -233,7 +243,7 @@ describe('v2.5 配额与权限引导', () => {
       },
     );
     render(<App />);
-    const input = screen.getByTestId('file-path-input');
+    const input = openSettingsPathInput();
     fireEvent.change(input, { target: { value: '/tmp/test.docx' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     // 已译部分保留
@@ -252,10 +262,12 @@ describe('v2.5 配额与权限引导', () => {
       throw new TranslateCancelledError(2);
     });
     render(<App />);
-    const input = screen.getByTestId('file-path-input');
+    const input = openSettingsPathInput();
     fireEvent.change(input, { target: { value: '/tmp/test.docx' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    await waitFor(() => expect(screen.getByTestId('translate-control')).toBeInTheDocument());
-    await waitFor(() => expect(screen.getByTestId('translate-continue-btn')).toBeInTheDocument());
+    // v2.6：暂停态收敛进 StatusChip（⏸ + Popover 内 [▶ 继续翻译]）
+    await waitFor(() => expect(screen.getByTestId('status-chip').dataset.state).toBe('paused'));
+    fireEvent.click(screen.getByTestId('status-chip'));
+    expect(screen.getByTestId('status-continue-btn')).toBeInTheDocument();
   });
 });

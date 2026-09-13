@@ -69,36 +69,45 @@ describe('DocumentViewer 文件类型徽章（T10.2）', () => {
   });
 });
 
+/** v2.6 slim toolbar：路径输入在 ⚙ 设置弹层内，先开弹层再取输入 */
+function openSettingsPathInput() {
+  fireEvent.click(screen.getByTestId('settings-btn'));
+  return screen.getByTestId('file-path-input');
+}
+
 describe('App PDF 流程（T10.1/T10.3）', () => {
   it('打开 .pdf 路径 → PDF 徽章 + 内容渲染', async () => {
     vi.mocked(parseDoc).mockResolvedValue(pdfDoc);
     render(<App />);
-    const input = screen.getByTestId('file-path-input');
+    const input = openSettingsPathInput();
     fireEvent.change(input, { target: { value: '/home/u/papers/two_column.pdf' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => expect(screen.getAllByText('A Two Column Study').length).toBe(2));
-    expect(screen.getByTestId('file-type-badge')).toHaveTextContent('PDF');
+    // v2.6：徽章迁至顶栏文档身份区（栏头移除前后均可能并存，取存在性断言）
+    expect(screen.getAllByTestId('file-type-badge').some((b) => b.textContent === 'PDF')).toBe(true);
     expect(parseDoc).toHaveBeenCalledWith('/home/u/papers/two_column.pdf', 'auto', expect.any(Function));
   });
 
   it('打开 .docx 路径 → DOCX 徽章（回归）', async () => {
     vi.mocked(parseDoc).mockResolvedValue(pdfDoc);
     render(<App />);
-    const input = screen.getByTestId('file-path-input');
+    const input = openSettingsPathInput();
     fireEvent.change(input, { target: { value: '/tmp/rich.docx' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    await waitFor(() => expect(screen.getByTestId('file-type-badge')).toHaveTextContent('DOCX'));
+    await waitFor(() =>
+      expect(screen.getAllByTestId('file-type-badge').some((b) => b.textContent === 'DOCX')).toBe(true),
+    );
   });
 
   it('路径输入框提示包含 .pdf', () => {
     render(<App />);
-    expect(screen.getByTestId('file-path-input').getAttribute('placeholder')).toContain('.pdf');
+    expect(openSettingsPathInput().getAttribute('placeholder')).toContain('.pdf');
   });
 
   it('解析失败 → 错误仍正常展示（加密/损坏 PDF 的 422 文案）', async () => {
     vi.mocked(parseDoc).mockRejectedValue(new Error('加密 PDF 暂不支持，请先解密后重试'));
     render(<App />);
-    const input = screen.getByTestId('file-path-input');
+    const input = openSettingsPathInput();
     fireEvent.change(input, { target: { value: '/x/enc.pdf' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => {

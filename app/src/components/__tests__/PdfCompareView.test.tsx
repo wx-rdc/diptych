@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { GDocument, Block } from '../../types';
-import { progressLabel } from '../Toolbar';
+import { progressLabel } from '../toolbar/ToolbarSlim';
 
 // pdfjs-dist 整体 mock：提供最小 getDocument/GlobalWorkerOptions
 vi.mock('pdfjs-dist', () => {
