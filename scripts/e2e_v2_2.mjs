@@ -88,15 +88,16 @@ let docId = null;
 }
 
 // ── 3. 题注块：右栏含 Figure 1 题注（含 KaTeX 行内公式）+ 图注块数 ──
+// v2.6 零点击：断言时翻译可能已将题注译为中文（图N/表N）——中英双口径匹配
 {
   const captionCount = await page.evaluate(() => {
     const panes = document.querySelectorAll('.geminus-pane');
     const right = panes[panes.length - 1];
-    // is_caption 段渲染为 0.9em 居中——按文本特征找 "Figure 1:" / "Table N:"
+    // is_caption 段渲染为 0.9em 居中——按文本特征找 "Figure 1:" / "Table N:" / "图1" / "表N"
     let n = 0;
     for (const p of right.querySelectorAll('[data-block-id]')) {
       const t = p.textContent ?? '';
-      if (/^(Figure|Table)\s*\d+[:.]/.test(t.trim())) n++;
+      if (/^(Figure|Table)\s*\d+[:.]|^(图|表)\s*\d+/.test(t.trim())) n++;
     }
     return n;
   });
@@ -104,7 +105,7 @@ let docId = null;
     const panes = document.querySelectorAll('.geminus-pane');
     const right = panes[panes.length - 1];
     for (const p of right.querySelectorAll('[data-block-id]')) {
-      if ((p.textContent ?? '').trim().startsWith('Figure 1')) {
+      if (/^(Figure 1|图\s*1)/.test((p.textContent ?? '').trim())) {
         return p.querySelectorAll('.katex').length;
       }
     }
@@ -301,7 +302,7 @@ let docId = null;
     const panes = document.querySelectorAll('.geminus-pane');
     const right = panes[panes.length - 1];
     for (const p of right.querySelectorAll('[data-block-id]')) {
-      if ((p.textContent ?? '').trim().startsWith('Figure 1')) {
+      if (/^(Figure 1|图\s*1)/.test((p.textContent ?? '').trim())) {
         p.scrollIntoView({ block: 'center' });
         break;
       }

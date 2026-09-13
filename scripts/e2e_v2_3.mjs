@@ -78,12 +78,16 @@ function rightPane() {
 }
 
 // ── 3. 右栏参考文献可见（B3）：[n] 起头段落 ≥30 ──
+// v2.6 零点击：断言时译文已产出——列表项带 • 前缀、hover 工具条文本混入 textContent，先剥离再匹配
 {
   const refs = await page.evaluate(() => {
     const right = rightPaneEval();
     let n = 0;
     for (const p of right.querySelectorAll('[data-block-id]')) {
-      if (/^\[\d+\]/.test((p.textContent ?? '').trim())) n++;
+      const t = (p.textContent ?? '')
+        .replace(/^复制原文复制译文重译本段/, '') // 段落 hover 工具条（常驻 DOM）
+        .trim();
+      if (/^[•‧]?\s*[\[［]\d+[］\]]/.test(t)) n++;
     }
     return n;
     function rightPaneEval() {

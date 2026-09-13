@@ -88,7 +88,7 @@ try {
   });
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 
-  // ── 1. 匿名零点击（v2.6）：上传 simple.pdf → 自动解析 → 401 → 自动弹登录框 ──
+  // ── 1. 匿名零点击（v2.6）：上传 simple.pdf → 200 外壳（无 IR）→ 前端引导登录框自动弹出 ──
   {
     let parseStatus = null;
     const onResponse = (res) => { if (res.url().includes('/api/parse')) parseStatus = res.status(); };
@@ -97,7 +97,8 @@ try {
     await page.setInputFiles('[data-testid="upload-input"]', `${FIX}/pdf/simple.pdf`);
     const dialogVisible = await page.getByTestId('login-overlay').waitFor({ timeout: 5000 }).then(() => true).catch(() => false);
     log('匿名上传零点击 → 自动弹登录框', dialogVisible);
-    log('匿名 /api/parse → 401（服务端门禁）', parseStatus === 401, `status=${parseStatus}`);
+    // v2.5 服务端模型：parse 收稿返回 200 外壳（IR 门禁在 /api/documents 与 /api/translate，见 §2 的 401 断言）
+    log('匿名 /api/parse → 200 外壳（IR 登录后交付）', parseStatus === 200, `status=${parseStatus}`);
     page.off('response', onResponse);
   }
 

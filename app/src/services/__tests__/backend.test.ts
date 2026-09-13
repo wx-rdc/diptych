@@ -34,6 +34,19 @@ describe('parseDoc', () => {
     );
   });
 
+  it('200 外壳响应（无 blocks，require_login 匿名态）→ 抛 401 引导登录', async () => {
+    // v2.6 修复：外壳曾被视为文档渲染导致 doc.blocks.map 白屏崩溃
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () =>
+        new Response(JSON.stringify({ id: 'shell1', title: 'x.pdf' }), { status: 200 })),
+    );
+    const e = await parseDoc('/tmp/x.pdf').catch((x) => x);
+    expect(e).toBeInstanceOf(BackendError);
+    expect(e.status).toBe(401);
+    expect(e.message).toContain('登录');
+  });
+
   it('HTTP 错误抛 BackendError 并带 error 字段', async () => {
     vi.stubGlobal(
       'fetch',

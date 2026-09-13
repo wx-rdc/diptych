@@ -183,7 +183,13 @@ async function consumeParseResponse(
     }
     throw new BackendError('连接中断：未收到 done 事件');
   }
-  return acceptToken((await res.json()) as GDocument);
+  const parsed = (await res.json()) as GDocument;
+  // 200 外壳（require_login 匿名态：仅 doc_id 无 IR）——按需登录处理，
+  // 防止无 blocks 的外壳流入渲染层（doc.blocks.map 白屏）
+  if (!parsed.blocks) {
+    throw new BackendError('请登录后查看与翻译文档', 401);
+  }
+  return acceptToken(parsed);
 }
 
 /** 原始 PDF 文件直链（pdf.js 渲染用；匿名文档附 token） */
