@@ -82,6 +82,70 @@ fn strip_formula_fence(text: &str) -> String {
     t.trim().to_string()
 }
 
+/// ── MinerU 伪上/下标噪声清洗（feedback_0913：14_EffTrans_Mamba 全篇伪 `<sub>`）──
+///
+/// MinerU VLM 对部分 TeX 字体文档（Linux Libertine 等）把正文普通字母识别成
+/// 上/下标（`Se<sub>qu</sub>ence` 式），前端白名单如实渲染 → 大量字符变小下沉。
+/// 合法标记（作者脚注 `<sup>1</sup>`、化学式 `<sub>2</sub>`）内容多为单字符，
+/// 伪标签内容是普通文本片段，据此分级判定后去包裹（剥标签保内容）：
+/// - 条目级：长内容（≥2 字符）标签 ≥3 个，或被包裹字符占比 ≥8% → 该条目去包裹；
+///   （单字符标签的包裹占比上限 ~7.7%，纯脚注标记天然不触发占比信号）
+/// - 文档级：噪声条目占文本条目 ≥10% → 整文档去包裹（零散残留与合法标记一并放弃，
+///   病态文档中保文本远比保上下标样式重要）。
+const SCRIPT_NOISE_LONG_TAGS: usize = 3;
+const SCRIPT_NOISE_CHAR_RATIO: f64 = 0.08;
+const SCRIPT_DOC_NOISE_PERCENT: usize = 10;
+
+/// `<sub>/<sup>` 标签统计 → (长内容标签数, 被包裹字符数)；未闭合开标签跳过
+fn script_tag_stats(text: &str) -> (usize, usize) {
+    let mut long_tags = 0;
+    let mut tagged_chars = 0;
+    let mut rest = text;
+    loop {
+        let pos = match (rest.find("<sub>"), rest.find("<sup>")) {
+            (None, None) => break,
+            (Some(a), Some(b)) => a.min(b),
+            (Some(a), None) | (None, Some(a)) => a,
+        };
+        let (open, close) = if rest[pos..].starts_with("<sub>") { ("<sub>", "</sub>") } else { ("<sup>", "</sup>") };
+        let after = &rest[pos + open.len()..];
+        let Some(end) = after.find(close) else {
+            rest = after;
+            continue;
+        };
+        let n = after[..end].trim().chars().count();
+        if n >= 2 {
+            long_tags += 1;
+        }
+        tagged_chars += n;
+        rest = &after[end + close.len()..];
+    }
+    (long_tags, tagged_chars)
+}
+
+/// 条目级伪上/下标噪声判定
+fn is_script_noise(text: &str) -> bool {
+    let (long_tags, tagged_chars) = script_tag_stats(text);
+    long_tags >= SCRIPT_NOISE_LONG_TAGS
+        || tagged_chars as f64 / text.chars().count().max(1) as f64 >= SCRIPT_NOISE_CHAR_RATIO
+}
+
+/// 剥除全部 `<sub>/<sup>` 开闭标签（保留内容；未闭合开标签一并剥除）
+fn strip_script_tags(text: &str) -> String {
+    text.replace("<sub>", "").replace("</sub>", "").replace("<sup>", "").replace("</sup>", "")
+}
+
+/// 文档级升级判定：噪声条目占文本条目 ≥10%
+fn is_doc_script_noise<S: AsRef<str>>(texts: &[S]) -> bool {
+    let noisy = texts.iter().filter(|t| is_script_noise(t.as_ref())).count();
+    !texts.is_empty() && noisy * SCRIPT_DOC_NOISE_PERCENT >= texts.len()
+}
+
+/// 条目清洗：文档级升级或条目自身噪声时去包裹
+fn sanitize_script_noise(text: &str, doc_noisy: bool) -> String {
+    if doc_noisy || is_script_noise(text) { strip_script_tags(text) } else { text.to_string() }
+}
+
 /// 按扩展名推断 MIME
 fn mime_of(path: &str) -> &'static str {
     let lower = path.to_ascii_lowercase();
@@ -152,6 +216,15 @@ fn adapt_v1(dir: &Path, page_offset: usize, fallback_title: &str) -> Result<Docu
         serde_json::from_reader(std::fs::File::open(find_content_list(dir)?)?)?;
     let layout = load_page_sizes(dir);
 
+    // 伪上/下标噪声文档级判定（条目级清洗在逐条映射时做）
+    let doc_noisy = is_doc_script_noise(
+        &items
+            .iter()
+            .filter(|i| matches!(i.item_type.as_str(), "text" | "ref_text"))
+            .map(|i| i.text.as_str())
+            .collect::<Vec<_>>(),
+    );
+
     let page_count = items.iter().map(|i| i.page_idx + 1).max().unwrap_or(1);
     let page_size_at = |local_idx: usize| -> [f64; 2] {
         layout.get(&local_idx).copied().unwrap_or([612.0, 792.0])
@@ -183,18 +256,19 @@ fn adapt_v1(dir: &Path, page_offset: usize, fallback_title: &str) -> Result<Docu
 
         match item.item_type.as_str() {
             "text" => {
+                let text = sanitize_script_noise(&item.text, doc_noisy);
                 let style = ParagraphStyle {
                     heading_level: item.text_level,
                     ..Default::default()
                 };
                 if item.text_level.is_some() && first_heading.is_none() {
-                    first_heading = Some(item.text.trim().to_string());
+                    first_heading = Some(text.trim().to_string());
                 }
                 blocks.push(Block::Paragraph {
                     id,
                     style,
                     content: vec![InlineContent::Text {
-                        text: item.text,
+                        text,
                         bold: false,
                         italic: false,
                         underline: false,
@@ -259,7 +333,7 @@ fn adapt_v1(dir: &Path, page_offset: usize, fallback_title: &str) -> Result<Docu
                     id,
                     style: ParagraphStyle { is_list_item: true, ..Default::default() },
                     content: vec![InlineContent::Text {
-                        text: item.text,
+                        text: sanitize_script_noise(&item.text, doc_noisy),
                         bold: false,
                         italic: false,
                         underline: false,
@@ -308,13 +382,14 @@ fn segs_to_inline(
     dir: &Path,
     resources: &mut HashMap<String, Resource>,
     counter: &mut usize,
+    doc_noisy: bool,
 ) -> (String, Vec<InlineContent>) {
     let mut text = String::new();
     let mut out = Vec::new();
     for seg in segs.and_then(|v| v.as_array()).into_iter().flatten() {
         match str_of(&seg["type"]).as_str() {
             "text" => {
-                let t = str_of(&seg["content"]);
+                let t = sanitize_script_noise(&str_of(&seg["content"]), doc_noisy);
                 text.push_str(&t);
                 out.push(InlineContent::Text { text: t, bold: false, italic: false, underline: false });
             }
@@ -341,6 +416,30 @@ fn segs_to_inline(
     (text, out)
 }
 
+/// v2 内容字段里 text 段文本收集（伪上/下标文档级判定用）。
+/// 覆盖全部已知 `*_content` / `*_caption` 文本段字段。
+fn collect_v2_text_segs<'a>(content: Option<&'a serde_json::Value>, out: &mut Vec<&'a str>) {
+    const SEG_KEYS: [&str; 7] = [
+        "title_content",
+        "paragraph_content",
+        "item_content",
+        "image_caption",
+        "chart_caption",
+        "table_caption",
+        "algorithm_content",
+    ];
+    let Some(content) = content else { return };
+    for key in SEG_KEYS {
+        for seg in content.get(key).and_then(|v| v.as_array()).into_iter().flatten() {
+            if seg.get("type").and_then(|v| v.as_str()) == Some("text") {
+                if let Some(t) = seg.get("content").and_then(|v| v.as_str()) {
+                    out.push(t);
+                }
+            }
+        }
+    }
+}
+
 /// v2 bbox（1000 归一化）→ PDF 点
 fn json_bbox(b: Option<&serde_json::Value>, size: [f64; 2]) -> Option<[f64; 4]> {
     let a = b?.as_array()?;
@@ -365,6 +464,16 @@ fn adapt_v2(
 ) -> Result<Document, AdaptError> {
     let pages: serde_json::Value = serde_json::from_reader(std::fs::File::open(v2_path)?)?;
     let layout = load_page_sizes(dir);
+    // 伪上/下标噪声文档级判定（条目级清洗在段转换时做）
+    let doc_noisy = {
+        let mut texts: Vec<&str> = Vec::new();
+        for page_blocks in pages.as_array().into_iter().flatten() {
+            for b in page_blocks.as_array().into_iter().flatten() {
+                collect_v2_text_segs(b.get("content"), &mut texts);
+            }
+        }
+        is_doc_script_noise(&texts)
+    };
     let mut blocks: Vec<Block> = Vec::new();
     let mut resources: HashMap<String, Resource> = HashMap::new();
     let mut render_meta: HashMap<String, RenderMeta> = HashMap::new();
@@ -395,7 +504,7 @@ fn adapt_v2(
                     let id = format!("b_{:04}", blocks.len());
                     let level = content.get("level").and_then(|v| v.as_u64()).unwrap_or(2) as u8;
                     let (text, segs) =
-                        segs_to_inline(content.get("title_content"), dir, &mut resources, &mut counter);
+                        segs_to_inline(content.get("title_content"), dir, &mut resources, &mut counter, doc_noisy);
                     if first_heading.is_none() && !text.trim().is_empty() {
                         first_heading = Some(text.trim().to_string());
                     }
@@ -412,7 +521,7 @@ fn adapt_v2(
                         content.get("paragraph_content"),
                         dir,
                         &mut resources,
-                        &mut counter,
+                        &mut counter, doc_noisy,
                     );
                     push_meta(&mut 0, &mut render_meta, id.clone(), page_offset + page_idx, bbox);
                     blocks.push(Block::Paragraph {
@@ -433,7 +542,7 @@ fn adapt_v2(
                             item.get("item_content"),
                             dir,
                             &mut resources,
-                            &mut counter,
+                            &mut counter, doc_noisy,
                         );
                         push_meta(&mut 0, &mut render_meta, id.clone(), page_offset + page_idx, bbox);
                         blocks.push(Block::Paragraph {
@@ -486,13 +595,13 @@ fn adapt_v2(
                         content.get("image_caption"),
                         dir,
                         &mut resources,
-                        &mut counter,
+                        &mut counter, doc_noisy,
                     );
                     let (_, chart_segs) = segs_to_inline(
                         content.get("chart_caption"),
                         dir,
                         &mut resources,
-                        &mut counter,
+                        &mut counter, doc_noisy,
                     );
                     cap_segs.extend(chart_segs);
                     if cap_segs
@@ -538,7 +647,7 @@ fn adapt_v2(
                         preview_text: Some(preview_text.chars().take(120).collect()),
                     });
                     let (_, cap_segs) =
-                        segs_to_inline(content.get("table_caption"), dir, &mut resources, &mut counter);
+                        segs_to_inline(content.get("table_caption"), dir, &mut resources, &mut counter, doc_noisy);
                     if cap_segs
                         .iter()
                         .any(|c| matches!(c, InlineContent::Text { text, .. } if !text.trim().is_empty()))
@@ -568,7 +677,7 @@ fn adapt_v2(
                         content.get("algorithm_caption"),
                         dir,
                         &mut resources,
-                        &mut counter,
+                        &mut counter, doc_noisy,
                     )
                     .0;
                     let mut lines: Vec<crate::model::AlgoLine> = Vec::new();
@@ -604,7 +713,7 @@ fn adapt_v2(
                     {
                         match seg.get("type").and_then(|v| v.as_str()) {
                             Some("text") => {
-                                let t = str_of(&seg["content"]);
+                                let t = sanitize_script_noise(&str_of(&seg["content"]), doc_noisy);
                                 for (k, piece) in t.split("\n\n").enumerate() {
                                     if k > 0 {
                                         flush(&mut cur, &mut lines);
@@ -1052,5 +1161,98 @@ mod tests {
             && text_of_block(&doc.blocks[5]).unwrap().contains("Table 1")));
         assert!(matches!(&doc.blocks[6], Block::Skipped { reason: crate::model::SkipReason::Decoration, .. }));
         assert_eq!(doc.title, "Title Here");
+    }
+
+    // ── 伪上/下标噪声清洗（feedback_0913：14_EffTrans_Mamba 全篇伪 <sub>）──
+
+    #[test]
+    fn script_noise_thresholds() {
+        // 合法脚注/化学式标记：单字符内容不触发
+        let footnotes = "HONGYU ZHU<sup>1</sup>, GUI LIU<sup>2</sup>, and RONG LI<sup>1</sup>";
+        assert!(!is_script_noise(footnotes));
+        assert!(!is_script_noise("Water H<sub>2</sub>O and CO<sub>2</sub> emissions"));
+        // 伪下标：≥3 个长内容标签触发（M<sub>ac</sub>hin<sub>e</sub> 式）
+        assert!(is_script_noise("M<sub>ac</sub>hin<sub>e</sub> L<sub>ea</sub>rnin<sub>g</sub> D<sub>epa</sub>rtm<sub>e</sub>nt"));
+        // 包裹字符占比 ≥8% 触发（不足 3 个长标签但短文本重度包裹）
+        assert!(is_script_noise("x<sub>abcd</sub> y<sub>efgh</sub>"));
+        // 偶发单个长标签（数学变量下标）不算噪声
+        assert!(!is_script_noise("where x<sub>max</sub> denotes the largest value in the input sequence"));
+        // 去包裹保留内容；统计跳过未闭合标签
+        assert_eq!(strip_script_tags("Se<sub>qu</sub>ence Mod<sup>el</sup>ing"), "Sequence Modeling");
+        assert_eq!(script_tag_stats("a<sub>bc"), (0, 0));
+        // 文档级：噪声条目占比 ≥10% 升级（1/10 恰好触发，0/10 不触发）
+        let noisy = "M<sub>ac</sub>hin<sub>e</sub> L<sub>ea</sub>rnin<sub>g</sub> D<sub>epa</sub>rtm<sub>e</sub>nt";
+        let mut texts = vec!["plain text item"; 10];
+        assert!(!is_doc_script_noise(&texts));
+        texts[0] = noisy;
+        assert!(is_doc_script_noise(&texts));
+    }
+
+    #[test]
+    fn v1_pseudo_script_stripped_footnotes_kept() {
+        // 孤立噪声条目（1/11 < 10% 不升级文档级）：仅该条目去包裹，脚注标记保留
+        let dir = tempfile::tempdir().unwrap();
+        let mut items = vec![
+            r#"{"type":"text","text":"F <sup>EW-SHOT</sup> <sup>image</sup> <sup>classification</sup> <sup>novel</sup> <sup>cat-</sup> egories from 1-5 examples","page_idx":0}"#.to_string(),
+            r#"{"type":"text","text":"HONGYU ZHU<sup>1</sup>, GUI LIU<sup>2</sup>, and RONG LI<sup>1</sup>","page_idx":0}"#.to_string(),
+        ];
+        for i in 0..9 {
+            items.push(format!(r#"{{"type":"text","text":"filler paragraph {i}","page_idx":0}}"#));
+        }
+        std::fs::write(dir.path().join("content_list.json"), format!("[{}]", items.join(","))).unwrap();
+        let ir = adapt_dir(dir.path(), 0, "x").unwrap();
+        let texts: Vec<String> = ir.blocks.iter().filter_map(text_of_block).collect();
+        assert_eq!(texts[0], "F EW-SHOT image classification novel cat- egories from 1-5 examples");
+        assert_eq!(texts[1], "HONGYU ZHU<sup>1</sup>, GUI LIU<sup>2</sup>, and RONG LI<sup>1</sup>");
+    }
+
+    #[test]
+    fn v1_pseudo_script_doc_escalation_strips_all() {
+        // 文档级升级（2/4 ≥ 10%）：残留 1-2 个标签的边缘条目也一并去包裹
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("content_list.json"),
+            r#"[
+              {"type":"text","text":"M<sub>ac</sub>hin<sub>e</sub> L<sub>ea</sub>rnin<sub>g</sub> Departm<sub>e</sub>nt","text_level":1,"page_idx":0},
+              {"type":"text","text":"Se<sub>qu</sub>ence Modelin<sub>g</sub> <sub>w</sub>ith Selecti<sub>v</sub>e State Spaces","page_idx":0},
+              {"type":"text","text":"Arena (Ta<sub>y</sub>, De<sub>g</sub>hani, et al. 2021)","page_idx":0},
+              {"type":"ref_text","text":"[1] G<sub>u</sub> et al. 2023.","page_idx":0}
+            ]"#,
+        )
+        .unwrap();
+        let ir = adapt_dir(dir.path(), 0, "x").unwrap();
+        let texts: Vec<String> = ir.blocks.iter().filter_map(text_of_block).collect();
+        assert!(texts.iter().all(|t| !t.contains("<sub>") && !t.contains("<sup>")), "{texts:?}");
+        assert_eq!(texts[0], "Machine Learning Department");
+        assert_eq!(ir.title, "Machine Learning Department");
+        assert_eq!(texts[3], "[1] Gu et al. 2023.");
+    }
+
+    #[test]
+    fn v2_pseudo_script_stripped_in_segs() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("content_list_v2.json"),
+            r#"[
+              [
+                {"type":"title","content":{"title_content":[
+                  {"type":"text","content":"M<sub>ac</sub>hin<sub>e</sub> L<sub>ea</sub>rnin<sub>g</sub> at CMU"}],"level":1},"bbox":[100,50,500,70]},
+                {"type":"paragraph","content":{"paragraph_content":[
+                  {"type":"text","content":"M<sub>ac</sub>hin<sub>e</sub> works "},
+                  {"type":"equation_inline","content":"x_t"},
+                  {"type":"text","content":"on se<sub>qu</sub>ences of to<sub>k</sub>ens."}]},"bbox":[100,80,500,120]}
+              ]
+            ]"#,
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("layout.json"),
+            r#"{"pdf_info":[{"page_size":[612,792],"page_idx":0}]}"#).unwrap();
+        let ir = adapt_dir(dir.path(), 0, "x").unwrap();
+        assert_eq!(ir.title, "Machine Learning at CMU");
+        let texts: Vec<String> = ir.blocks.iter().filter_map(text_of_block).collect();
+        assert!(texts.iter().all(|t| !t.contains("<sub>")), "{texts:?}");
+        assert_eq!(texts[1], "Machine works on sequences of tokens.");
+        // 行内公式资源不受清洗影响
+        assert!(ir.resources.values().any(|r| r.latex.as_deref() == Some("x_t")), "equation_inline 不应被改写");
     }
 }
