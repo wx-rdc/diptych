@@ -15,7 +15,11 @@ const block: Block = {
   content: [{ type: 'text', text: '原文内容' }],
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.mocked(retranslateParagraph).mockReset();
+});
 
 describe('ParagraphToolbar hover 工具条（T7.2）', () => {
   it('渲染三个动作按钮', () => {
@@ -92,5 +96,73 @@ describe('ParagraphToolbar hover 工具条（T7.2）', () => {
     fireEvent.click(screen.getByTestId('retranslate-btn'));
     await waitFor(() => expect(retranslateParagraph).toHaveBeenCalled());
     expect(onRetranslated).not.toHaveBeenCalled();
+  });
+});
+
+describe('ParagraphToolbar（v2.7 右外侧垂直图标列）', () => {
+  it('容器定位在段落右外侧（translate-x-full）且垂直排列（flex-col），不遮挡正文', () => {
+    render(
+      <ParagraphToolbar
+        docId="d"
+        block={block}
+        translatedText="译文内容"
+        sourceLang="en"
+        targetLang="zh"
+        onRetranslated={() => {}}
+      />,
+    );
+    const bar = screen.getByTestId('paragraph-toolbar-b_0001');
+    expect(bar.className).toContain('translate-x-full'); // 整列移出段落右缘
+    expect(bar.className).toContain('flex-col'); // 垂直排列
+    expect(bar.className).toContain('group-hover:flex'); // hover 显示
+    expect(bar.className).toContain('right-0');
+  });
+
+  it('三枚图标按钮：svg 图标 + title/aria-label 齐备', () => {
+    render(
+      <ParagraphToolbar
+        docId="d"
+        block={block}
+        translatedText="译文内容"
+        sourceLang="en"
+        targetLang="zh"
+        onRetranslated={() => {}}
+      />,
+    );
+    for (const [tid, label] of [
+      ['copy-source-btn', '复制原文'],
+      ['copy-target-btn', '复制译文'],
+      ['retranslate-btn', '重译本段'],
+    ] as const) {
+      const btn = screen.getByTestId(tid) as HTMLButtonElement;
+      expect(btn.title).toBe(label);
+      expect(btn.getAttribute('aria-label')).toBe(label);
+      expect(btn.querySelector('svg')).toBeTruthy(); // 图标按钮
+    }
+  });
+
+  it('复制成功后按钮进入已复制态（data-copied + 图标换对勾）', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(
+      <ParagraphToolbar
+        docId="d"
+        block={block}
+        translatedText="译文内容"
+        sourceLang="en"
+        targetLang="zh"
+        onRetranslated={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('copy-source-btn'));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('原文内容'));
+    const btn = screen.getByTestId('copy-source-btn');
+    expect(btn.dataset.copied).toBe('true');
+    expect(btn.title).toBe('已复制');
+    // 1.2s 后反馈复位
+    await waitFor(
+      () => expect(screen.getByTestId('copy-source-btn').dataset.copied).toBeUndefined(),
+      { timeout: 2000 },
+    );
   });
 });

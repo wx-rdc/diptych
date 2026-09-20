@@ -105,8 +105,7 @@ describe('usePaneSync 交互', () => {
 
   it('卸载时清除 hover 类', async () => {
     let left!: HTMLDivElement;
-    let right!: HTMLDivElement;
-    const { unmount } = render(<Host onReady={(l, r) => { left = l; right = r; }} />);
+    const { unmount } = render(<Host onReady={(l) => { left = l; }} />);
     await act(async () => {
       fireEvent.mouseOver(left.querySelector('[data-block-id="b1"]')!);
       await new Promise((r2) => setTimeout(r2, 30));
