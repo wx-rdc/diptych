@@ -915,3 +915,4 @@ git commit -m "docs(plan): v2.7 滚动收口 + 工具条图标列——执行勾
   e2e_v2_4 **26/26 全绿**（hover 高亮 / 点击居中 / 工具条 outside+vertical / 滚动独立双侧不动）；
   e2e_v2_2 **19/20**——唯一失败「Figure 1 题注含行内公式 katex=0」为本轮全新 LLM 翻译的输出波动（同前端代码上一轮 katex=4 通过），与本改动无关；其余含新「点击对齐 left=0px right=0px」全过。
 - **环境注记：** 本机 headless 下 pdf.js 偶发降级 text 模式（E2E 对两种 viewer 均兼容，非本改动引入）；自起服务器的匿名配额会被多轮 E2E 耗尽导致右栏部分翻译——重跑前需清状态目录。
+- **任务 5（2026-09-20）：** `GEMINUS_SERVER=opc01 deploy/publish.sh v2.7-click-sync-rc1 --skip-tests --public-base=https://x.wx-rdc.top` 发布成功（传输 ✓ / version ✓ / 双段冒烟 29/29 ✓）。公网验收：pdf.worker 0（内联）✓、JS MIME text/javascript ✓、新工具条代码已上线 ✓；浏览器交互验收 5/5——匿名零点击打开（pdf 模式）、翻译完成、滚动独立（右栏滚左栏不动）、点击居中 left=13px/right=16px、工具条 shown+outside+vertical ✓。截图 `docs/screenshots/v2.7/public-toolbar.png`。
