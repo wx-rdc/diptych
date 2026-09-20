@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import type { Block, GDocument } from '../types';
 import BlockRenderer from './BlockRenderer';
 import Pane from './Pane';
-import { useHoverDrivenSync } from '../hooks/useHoverDrivenSync';
+import { usePaneSync } from '../hooks/usePaneSync';
 
 interface Props {
   doc: GDocument;
@@ -19,7 +19,7 @@ interface Props {
 }
 
 /** 双栏对照视图：左原文 / 右译文，占位符保位。
- * v2.4：同步由 useHoverDrivenSync 接管（Hover 主从 + 锚点居中追踪）。
+ * v2.7：交互由 usePaneSync 提供（hover 联动高亮 + click 双侧居中；滚动完全独立）。
  * v2.6：栏头移除——浮标由 Pane 渲染，类型徽章在顶栏文档身份区。 */
 export default function DocumentViewer({
   doc,
@@ -36,7 +36,7 @@ export default function DocumentViewer({
   const leftRef = originalRef ?? originalInner;
   const rightRef = translatedRef ?? translatedInner;
 
-  useHoverDrivenSync(leftRef, rightRef);
+  usePaneSync(leftRef, rightRef);
 
   const translatedBlocks = doc.blocks.map((b) => translatedMap[b.id] || b);
 

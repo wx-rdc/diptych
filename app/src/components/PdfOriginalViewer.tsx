@@ -110,8 +110,7 @@ export default function PdfOriginalViewer({
     return () => observer.disconnect();
   }, [renderer.ready, renderer.pages, containerRef]);
 
-  // v2.4：active 定位改由 useHoverDrivenSync 的 click 居中接管（双侧统一），
-  // 原「activeId → 滚动到目标页顶」的 effect 移除
+  // v2.7：active 定位由 usePaneSync 的 click 居中接管（双侧统一），无滚动驱动 effect
 
   if (renderer.error) {
     return (

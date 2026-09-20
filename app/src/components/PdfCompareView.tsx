@@ -11,7 +11,7 @@ import { originalPdfUrl } from '../services/backend';
 import BlockRenderer from './BlockRenderer';
 import Pane from './Pane';
 import PdfOriginalViewer, { buildContentBboxes } from './PdfOriginalViewer';
-import { useHoverDrivenSync } from '../hooks/useHoverDrivenSync';
+import { usePaneSync } from '../hooks/usePaneSync';
 import { buildLeftAnchors, buildRightAnchors, type Anchor } from '../utils/anchor';
 
 interface Props {
@@ -31,9 +31,8 @@ interface Props {
 
 /**
  * 原始渲染模式（v2）：左 pdf.js 原始页面 + 区域叠加，右译文。
- * v2.4：同步改由 useHoverDrivenSync 接管（Hover 主从 + 锚点居中追踪 + 比例降级），
- * v2.2 的锚点插值插值同步与程序窗逻辑整体移除；
- * 锚点表保留构建（__anchors 调试钩子，E2E 诊断依赖）。
+ * v2.7：交互由 usePaneSync 提供（hover 联动高亮 + click 双侧居中；滚动完全独立），
+ * v2.4 的 hover/滚动驱动自动对齐已移除；锚点表保留构建（__anchors 调试钩子）。
  */
 export default function PdfCompareView({
   doc,
@@ -55,7 +54,7 @@ export default function PdfCompareView({
   const rightAnchorsRef = useRef<Anchor[]>([]);
   const pageElsRef = useRef<Map<number, HTMLDivElement>>(new Map());
 
-  useHoverDrivenSync(leftRef, rightRef);
+  usePaneSync(leftRef, rightRef);
 
   // 块 → 页号索引（右侧段落定位用）
   const blockPage = (blockId: string): number | null => doc.render_meta?.[blockId]?.page_idx ?? null;

@@ -120,7 +120,7 @@ export default function App() {
     setFilePath(v);
   }, []);
 
-  // v2.4：双栏滚动容器（useHoverDrivenSync 在两侧视图内接管同步）
+  // v2.7：双栏滚动容器（usePaneSync 在两侧视图内接管 hover 高亮 + click 居中）
   const originalRef = useRef<HTMLDivElement>(null);
   const translatedRef = useRef<HTMLDivElement>(null);
   const { fontSize, increase: fontIncrease, decrease: fontDecrease } = useReadingFontSize();
