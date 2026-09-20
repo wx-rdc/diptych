@@ -212,45 +212,31 @@ let docId = null;
   log('行内公式 KaTeX 数量 ≥45（61 inline+8 display，少量降级占位）', math.katexCount >= 45, `katex=${math.katexCount}`);
 }
 
-// ── 7. Hover 驱动同步（v2.4 模型）：hover 左栏算法块 → 滚动左栏 → 右栏把左栏当前 hover 块居中 ──
+// ── 7. 点击对齐（v2.7 模型）：点击左栏算法块 → 双侧块居中 ──
 {
   const cardId = await page.evaluate(() => {
     const card0 = document.querySelector('[data-testid^="algorithm-card-"]');
     return card0 ? card0.getAttribute('data-block-id') : null;
   });
-  // hover 左栏算法 region → master=left、hovered=算法块（region 已挂 data-block-id）
-  await page.hover(`[data-block-id="${cardId}"] >> nth=0`);
-  await page.waitForTimeout(150);
-  // 滚动左栏（master 滚动事件；Chromium 滚动后更新 hover 目标 = 焦点跟随）
-  await page.evaluate(() => {
-    const left = document.querySelectorAll('.geminus-pane')[0];
-    left.scrollTop += 260;
-  });
-  await page.waitForTimeout(900); // lerp 收敛
-  const res = await page.evaluate(() => {
+  await page.click(`[data-block-id="${cardId}"] >> nth=0`); // nth=0 取左栏 region
+  await page.waitForTimeout(1000); // 双侧 smooth 滚动
+  const res = await page.evaluate((id) => {
     const panes = document.querySelectorAll('.geminus-pane');
     const [left, right] = [panes[0], panes[panes.length - 1]];
-    const hovered = left.querySelector('.g-block-hover');
-    if (!hovered) return null;
-    const id = hovered.dataset.blockId;
-    const target = right.querySelector(`[data-block-id="${id}"]`);
-    if (!target) return null;
-    const rp = right.getBoundingClientRect();
-    const tr = target.getBoundingClientRect();
-    const lp = left.getBoundingClientRect();
-    const lr = hovered.getBoundingClientRect();
-    return {
-      id,
-      rightCenterDist: Math.abs(tr.top + tr.height / 2 - (rp.top + rp.height / 2)),
-      hoveredInViewport: lr.bottom > lp.top && lr.top < lp.bottom,
+    const dist = (pane) => {
+      const el = pane.querySelector(`[data-block-id="${id}"]`);
+      if (!el) return null;
+      const pr = pane.getBoundingClientRect();
+      const er = el.getBoundingClientRect();
+      return Math.abs(er.top + er.height / 2 - (pr.top + pr.height / 2));
     };
-  });
+    return { id, left: dist(left), right: dist(right) };
+  }, cardId);
   log(
-    'Hover 追踪：右栏将左栏 hover 块居中（≤80px）',
-    !!res && res.rightCenterDist <= 80,
-    res ? `id=${res.id} dist=${Math.round(res.rightCenterDist)}px` : '未找到 hover 块',
+    '点击对齐：双侧算法块中心距视口中心 ≤80px',
+    !!res && res.left !== null && res.right !== null && res.left <= 80 && res.right <= 80,
+    res ? `left=${Math.round(res.left)}px right=${Math.round(res.right)}px` : '未找到块',
   );
-  log('hover 块仍在左栏视口内（追踪未失控）', !!res && res.hoveredInViewport);
 }
 
 // ── 8. 控件锚定：hover 公式块 → 按钮在块内右上角 ──

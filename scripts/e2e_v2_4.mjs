@@ -1,6 +1,6 @@
 /**
- * 浏览器端到端验证（v2.4）：权限收口（require_login）/ 历史记录 / Hover 联动 /
- * Click 居中 / 滚动锁 + 锚点追踪。
+ * 浏览器端到端验证（v2.4）：权限收口（require_login）/ 历史记录 / Hover 联动高亮 /
+ * Click 居中 / 滚动独立（v2.7：自动对齐滚动已移除）。
  * 自起专项服务器：GEMINUS_REQUIRE_LOGIN=1，端口 39322，db/uploads 隔离到 tempdir，
  * MINERU_API_KEY 置空（全部走 builtin 解析，零云端调用）。
  * 前置：cargo build --release -p geminus-server；(cd app && pnpm build)；
@@ -240,9 +240,57 @@ try {
       `left=${Math.round(dists.left ?? -1)}px right=${Math.round(dists.right ?? -1)}px`);
   }
 
-  // ── 7. 滚动锁 + 锚点追踪：hover 左栏 → 滚动 → 右栏把左栏 hover 块居中且左栏无回滚 ──
+  // ── 6.5 段落工具条（v2.7）：右外侧垂直图标列，不遮挡正文 ──
   {
-    // hover 左栏中部某块
+    const geo = await page.evaluate(() => {
+      const panes = document.querySelectorAll('.geminus-pane');
+      const right = panes[panes.length - 1];
+      const para = right.querySelector('.group > p');
+      const bar = right.querySelector('[data-testid^="paragraph-toolbar-"]');
+      if (!para || !bar) return null;
+      const pr = para.getBoundingClientRect();
+      const br = bar.getBoundingClientRect();
+      const btns = Array.from(bar.querySelectorAll('button')).map((b) => {
+        const r = b.getBoundingClientRect();
+        return { x: r.x, y: r.y };
+      });
+      return {
+        outside: br.left >= pr.right - 1, // 工具条整体在段落右缘之外
+        vertical:
+          btns.length === 3 &&
+          Math.max(...btns.map((b) => b.x)) - Math.min(...btns.map((b) => b.x)) <= 2 &&
+          btns.every((b, i) => i === 0 || b.y > btns[i - 1].y), // 三图标垂直排列
+        hiddenByDefault: getComputedStyle(bar).display === 'none',
+      };
+    });
+    log('工具条：初始隐藏（hover 才显示）', !!geo && geo.hiddenByDefault);
+    // hover 段落后可见
+    await page.evaluate(() => {
+      const panes = document.querySelectorAll('.geminus-pane');
+      const para = panes[panes.length - 1].querySelector('.group > p');
+      para?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    });
+    await sleep(300);
+    const shown = await page.evaluate(() => {
+      const panes = document.querySelectorAll('.geminus-pane');
+      const bar = panes[panes.length - 1].querySelector('[data-testid^="paragraph-toolbar-"]');
+      return bar ? getComputedStyle(bar).display !== 'none' : false;
+    });
+    log('工具条：hover 段落后显示', shown);
+    log('工具条：位于段落右外侧且三图标垂直排列（不遮挡正文）',
+      !!geo && geo.outside && geo.vertical,
+      geo ? `outside=${geo.outside} vertical=${geo.vertical}` : '未找到段落/工具条');
+  }
+
+  // ── 7. 滚动独立（v2.7）：单栏滚动不再驱动另一栏自动对齐 ──
+  {
+    const rightBefore = await page.evaluate(
+      () =>
+        document.querySelectorAll('.geminus-pane')[
+          document.querySelectorAll('.geminus-pane').length - 1
+        ].scrollTop,
+    );
+    // 先 hover 左栏中部某块（v2.4 曾借此驱动追踪——现仅剩高亮，不应再引起滚动）
     const hoverId = await page.evaluate(() => {
       const panes = document.querySelectorAll('.geminus-pane');
       const left = panes[0];
@@ -262,30 +310,20 @@ try {
       left.scrollTop += 260;
       return left.scrollTop;
     });
-    await sleep(150);
-    const leftAfter100 = await page.evaluate(() => document.querySelectorAll('.geminus-pane')[0].scrollTop);
-    await sleep(900); // lerp 收敛
-    const res = await page.evaluate(() => {
+    await sleep(900);
+    const res = await page.evaluate((before) => {
       const panes = document.querySelectorAll('.geminus-pane');
-      const [left, right] = [panes[0], panes[panes.length - 1]];
-      const hovered = left.querySelector('.g-block-hover');
-      if (!hovered) return null;
-      const id = hovered.dataset.blockId;
-      const target = right.querySelector(`[data-block-id="${id}"]`);
-      if (!target) return null;
-      const rp = right.getBoundingClientRect();
-      const tr = target.getBoundingClientRect();
       return {
-        id,
-        rightCenterDist: Math.abs(tr.top + tr.height / 2 - (rp.top + rp.height / 2)),
-        leftStable: Math.abs(left.scrollTop - document.querySelectorAll('.geminus-pane')[0].scrollTop) < 2,
+        left: panes[0].scrollTop,
+        right: panes[panes.length - 1].scrollTop,
+        before,
       };
-    });
-    log('锚点追踪：右栏将左栏当前 hover 块居中（≤80px）',
-      !!res && res.rightCenterDist <= 80, res ? `id=${res.id} dist=${Math.round(res.rightCenterDist)}px` : '未找到 hover 块');
-    const leftFinal = await page.evaluate(() => document.querySelectorAll('.geminus-pane')[0].scrollTop);
-    log('滚动锁：master（左栏）scrollTop 稳定无回滚', Math.abs(leftFinal - scrollSet) <= 2 && Math.abs(leftAfter100 - scrollSet) <= 2,
-      `set=${scrollSet} final=${Math.round(leftFinal)}`);
+    }, rightBefore);
+    log('滚动独立：hover + 滚动左栏，右栏 scrollTop 纹丝不动',
+      Math.abs(res.right - res.before) <= 2,
+      `before=${Math.round(res.before)} after=${Math.round(res.right)}`);
+    log('滚动独立：左栏自身滚动稳定无回滚', Math.abs(res.left - scrollSet) <= 2,
+      `set=${scrollSet} final=${Math.round(res.left)}`);
   }
 
   await browser.close();
