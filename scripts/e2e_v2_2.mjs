@@ -214,29 +214,35 @@ let docId = null;
 
 // ── 7. 点击对齐（v2.7 模型）：点击左栏算法块 → 双侧块居中 ──
 {
+  // 等译文侧渲染出算法卡（翻译流式进行时右栏块逐步就位）
+  await waitCount('[data-testid^="algorithm-card-"]', 1, 60000);
   const cardId = await page.evaluate(() => {
     const card0 = document.querySelector('[data-testid^="algorithm-card-"]');
     return card0 ? card0.getAttribute('data-block-id') : null;
   });
-  await page.click(`[data-block-id="${cardId}"] >> nth=0`); // nth=0 取左栏 region
-  await page.waitForTimeout(1000); // 双侧 smooth 滚动
-  const res = await page.evaluate((id) => {
-    const panes = document.querySelectorAll('.geminus-pane');
-    const [left, right] = [panes[0], panes[panes.length - 1]];
-    const dist = (pane) => {
-      const el = pane.querySelector(`[data-block-id="${id}"]`);
-      if (!el) return null;
-      const pr = pane.getBoundingClientRect();
-      const er = el.getBoundingClientRect();
-      return Math.abs(er.top + er.height / 2 - (pr.top + pr.height / 2));
-    };
-    return { id, left: dist(left), right: dist(right) };
-  }, cardId);
-  log(
-    '点击对齐：双侧算法块中心距视口中心 ≤80px',
-    !!res && res.left !== null && res.right !== null && res.left <= 80 && res.right <= 80,
-    res ? `left=${Math.round(res.left)}px right=${Math.round(res.right)}px` : '未找到块',
-  );
+  if (!cardId) {
+    log('点击对齐：未找到算法块（跳过）', false, '右栏无 algorithm-card');
+  } else {
+    await page.click(`[data-block-id="${cardId}"] >> nth=0`); // nth=0 取左栏 region
+    await page.waitForTimeout(1000); // 双侧 smooth 滚动
+    const res = await page.evaluate((id) => {
+      const panes = document.querySelectorAll('.geminus-pane');
+      const [left, right] = [panes[0], panes[panes.length - 1]];
+      const dist = (pane) => {
+        const el = pane.querySelector(`[data-block-id="${id}"]`);
+        if (!el) return null;
+        const pr = pane.getBoundingClientRect();
+        const er = el.getBoundingClientRect();
+        return Math.abs(er.top + er.height / 2 - (pr.top + pr.height / 2));
+      };
+      return { id, left: dist(left), right: dist(right) };
+    }, cardId);
+    log(
+      '点击对齐：双侧算法块中心距视口中心 ≤80px',
+      !!res && res.left !== null && res.right !== null && res.left <= 80 && res.right <= 80,
+      res ? `left=${Math.round(res.left)}px right=${Math.round(res.right)}px` : '未找到块',
+    );
+  }
 }
 
 // ── 8. 控件锚定：hover 公式块 → 按钮在块内右上角 ──

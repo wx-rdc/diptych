@@ -178,6 +178,15 @@ try {
       await sleep(250);
     }
     log('长文档打开且左栏可滚动（交互前置）', scrollable > 200, `scrollable=${Math.round(scrollable)}px`);
+    // v2.7：等翻译完成——右栏流式替换会持续改变块高，居中/工具条几何断言需稳定布局
+    const settled = await page
+      .waitForFunction(
+        () => document.querySelector('[data-testid="status-chip"]')?.dataset.state === 'done',
+        { timeout: 180000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    log('长文档翻译完成（右栏布局稳定）', settled);
     await sleep(500);
   }
 
@@ -221,65 +230,89 @@ try {
       }
       return best;
     });
+    // 点击前基线（区分「居中到位」与「短栏已尽力」）
+    const measure = (id) =>
+      page.evaluate((blockId) => {
+        const panes = document.querySelectorAll('.geminus-pane');
+        const [left, right] = [panes[0], panes[panes.length - 1]];
+        const info = (pane) => {
+          const el = pane.querySelector(`[data-block-id="${blockId}"]`);
+          if (!el) return null;
+          const pr = pane.getBoundingClientRect();
+          const er = el.getBoundingClientRect();
+          const max = pane.scrollHeight - pane.clientHeight;
+          return {
+            centerDist: Math.abs(er.top + er.height / 2 - (pr.top + pr.height / 2)),
+            clamped: Math.abs(pane.scrollTop) <= 2 || Math.abs(pane.scrollTop - max) <= 2,
+            maxScroll: max,
+          };
+        };
+        return { left: info(left), right: info(right) };
+      }, id);
+    const before = await measure(targetId);
     await page.click(`[data-block-id="${targetId}"] >> nth=-1`); // nth=-1 取右栏
     await sleep(1000); // 双侧 smooth 滚动
-    const dists = await page.evaluate((id) => {
-      const panes = document.querySelectorAll('.geminus-pane');
-      const [left, right] = [panes[0], panes[panes.length - 1]];
-      const centerDist = (pane) => {
-        const el = pane.querySelector(`[data-block-id="${id}"]`);
-        if (!el) return null;
-        const pr = pane.getBoundingClientRect();
-        const er = el.getBoundingClientRect();
-        return Math.abs(er.top + er.height / 2 - (pr.top + pr.height / 2));
-      };
-      return { left: centerDist(left), right: centerDist(right) };
-    }, targetId);
-    log('Click 居中：双侧目标块中心距视口中心 <80px',
-      dists.left !== null && dists.right !== null && dists.left < 80 && dists.right < 80,
-      `left=${Math.round(dists.left ?? -1)}px right=${Math.round(dists.right ?? -1)}px`);
+    const after = await measure(targetId);
+    // 居中到位；或短栏不可滚/已滚到边界且距离较点击前收敛（尽力居中）
+    const okPane = (b, a) =>
+      !!a &&
+      (a.centerDist < 80 ||
+        a.maxScroll <= 2 ||
+        (a.clamped && !!b && a.centerDist < b.centerDist));
+    log('Click 居中：双侧目标块居中（<80px，或短栏滚动到边界尽力收敛）',
+      okPane(before.left, after.left) && okPane(before.right, after.right),
+      `left=${Math.round(after.left?.centerDist ?? -1)}px right=${Math.round(after.right?.centerDist ?? -1)}px ` +
+        `maxL=${Math.round(after.left?.maxScroll ?? -1)} maxR=${Math.round(after.right?.maxScroll ?? -1)}`);
   }
 
   // ── 6.5 段落工具条（v2.7）：右外侧垂直图标列，不遮挡正文 ──
   {
-    const geo = await page.evaluate(() => {
+    // 右栏首个带工具条的正文段（父 wrapper 含 paragraph-toolbar；真实 hover 才触发 CSS :hover）
+    const target = await page.evaluate(() => {
       const panes = document.querySelectorAll('.geminus-pane');
       const right = panes[panes.length - 1];
-      const para = right.querySelector('.group > p');
-      const bar = right.querySelector('[data-testid^="paragraph-toolbar-"]');
-      if (!para || !bar) return null;
-      const pr = para.getBoundingClientRect();
-      const br = bar.getBoundingClientRect();
-      const btns = Array.from(bar.querySelectorAll('button')).map((b) => {
-        const r = b.getBoundingClientRect();
-        return { x: r.x, y: r.y };
-      });
-      return {
-        outside: br.left >= pr.right - 1, // 工具条整体在段落右缘之外
-        vertical:
-          btns.length === 3 &&
-          Math.max(...btns.map((b) => b.x)) - Math.min(...btns.map((b) => b.x)) <= 2 &&
-          btns.every((b, i) => i === 0 || b.y > btns[i - 1].y), // 三图标垂直排列
-        hiddenByDefault: getComputedStyle(bar).display === 'none',
-      };
+      for (const p of right.querySelectorAll('.group > p')) {
+        if (p.parentElement?.querySelector('[data-testid^="paragraph-toolbar-"]')) {
+          return p.dataset.blockId ?? null;
+        }
+      }
+      return null;
     });
-    log('工具条：初始隐藏（hover 才显示）', !!geo && geo.hiddenByDefault);
-    // hover 段落后可见
-    await page.evaluate(() => {
-      const panes = document.querySelectorAll('.geminus-pane');
-      const para = panes[panes.length - 1].querySelector('.group > p');
-      para?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-    });
-    await sleep(300);
-    const shown = await page.evaluate(() => {
-      const panes = document.querySelectorAll('.geminus-pane');
-      const bar = panes[panes.length - 1].querySelector('[data-testid^="paragraph-toolbar-"]');
-      return bar ? getComputedStyle(bar).display !== 'none' : false;
-    });
-    log('工具条：hover 段落后显示', shown);
-    log('工具条：位于段落右外侧且三图标垂直排列（不遮挡正文）',
-      !!geo && geo.outside && geo.vertical,
-      geo ? `outside=${geo.outside} vertical=${geo.vertical}` : '未找到段落/工具条');
+    log('右栏存在带工具条的段落', !!target);
+    if (target) {
+      const hiddenBefore = await page.evaluate((id) => {
+        const bar = document.querySelector(`[data-testid="paragraph-toolbar-${id}"]`);
+        return bar ? getComputedStyle(bar).display === 'none' : null;
+      }, target);
+      log('工具条：初始隐藏（hover 才显示）', hiddenBefore === true);
+      await page.hover(`[data-block-id="${target}"] >> nth=-1`); // nth=-1 取右栏
+      await sleep(300);
+      const geo = await page.evaluate((id) => {
+        const panes = document.querySelectorAll('.geminus-pane');
+        const right = panes[panes.length - 1];
+        const para = right.querySelector(`[data-block-id="${id}"]`);
+        const bar = right.querySelector(`[data-testid="paragraph-toolbar-${id}"]`);
+        if (!para || !bar) return null;
+        const pr = para.getBoundingClientRect();
+        const br = bar.getBoundingClientRect();
+        const btns = Array.from(bar.querySelectorAll('button')).map((b) => {
+          const r = b.getBoundingClientRect();
+          return { x: r.x, y: r.y };
+        });
+        return {
+          shown: getComputedStyle(bar).display !== 'none',
+          outside: br.left >= pr.right - 1, // 工具条整体在段落右缘之外
+          vertical:
+            btns.length === 3 &&
+            Math.max(...btns.map((b) => b.x)) - Math.min(...btns.map((b) => b.x)) <= 2 &&
+            btns.every((b, i) => i === 0 || b.y > btns[i - 1].y), // 三图标垂直排列
+        };
+      }, target);
+      log('工具条：hover 段落后显示', !!geo && geo.shown);
+      log('工具条：位于段落右外侧且三图标垂直排列（不遮挡正文）',
+        !!geo && geo.outside && geo.vertical,
+        geo ? `outside=${geo.outside} vertical=${geo.vertical}` : '未测得几何');
+    }
   }
 
   // ── 7. 滚动独立（v2.7）：单栏滚动不再驱动另一栏自动对齐 ──
