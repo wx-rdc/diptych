@@ -59,6 +59,44 @@ fn utf8_char_len(byte: u8) -> usize {
     }
 }
 
+/// 剥除字面 `{{Pn}}` 令牌（降级时避免噪音直达用户），并折叠剥除留下的连续空格
+fn strip_p_tokens(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] == b'{' && text[i..].starts_with("{{P") {
+            let mut j = i + 3;
+            let mut num = String::new();
+            while j < bytes.len() && bytes[j].is_ascii_digit() {
+                num.push(bytes[j] as char);
+                j += 1;
+            }
+            if !num.is_empty() && text[j..].starts_with("}}") {
+                i = j + 2;
+                continue;
+            }
+        }
+        let ch_len = utf8_char_len(bytes[i]);
+        out.push_str(&text[i..i + ch_len]);
+        i += ch_len;
+    }
+    out
+}
+
+fn collapse_spaces(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut prev_space = false;
+    for c in s.chars() {
+        let is_space = c == ' ';
+        if !(is_space && prev_space) {
+            out.push(c);
+        }
+        prev_space = is_space;
+    }
+    out
+}
+
 /// 重建译文段落。
 /// 返回 (新块, 是否降级)。降级 = 令牌被 LLM 破坏（缺失/多余/未知）或译文为空，
 /// 此时译文 Text 在前、原行内资产按序追加在后（或整块回退原文）。
@@ -93,34 +131,47 @@ pub fn rebuild_paragraph(
     };
 
     // 令牌校验：译文中出现的令牌集合必须与 refs 完全一致（无缺失/重复/未知）
+    // v2.8 容错：数量一致且互不重复但含越界编号（模型串号，如把 {{P3}} 写成
+    // 相邻段的全局 {{P11}}）→ 按出现顺序容错回填，仍标降级；
+    // 其余破坏（缺失/重复）→ 剥除字面令牌 + 资产按原序追加，避免 {{P11}} 噪音直达用户。
     let segments = split_tokens(translated_text);
     let mut seen: Vec<usize> = Vec::new();
-    let mut valid = true;
+    let mut out_of_range = false;
+    let mut duplicate = false;
     for seg in &segments {
         if let Segment::Token(idx) = seg {
-            if *idx >= refs.len() || seen.contains(idx) {
-                valid = false;
-                break;
+            if *idx >= refs.len() {
+                out_of_range = true;
+            }
+            if seen.contains(idx) {
+                duplicate = true;
             }
             seen.push(*idx);
         }
     }
-    if seen.len() != refs.len() {
-        valid = false;
-    }
+    let exact = !duplicate && !out_of_range && seen.len() == refs.len();
+    let tolerant = !duplicate && out_of_range && seen.len() == refs.len();
+    let valid = exact || tolerant;
 
     let new_content: Vec<InlineContent> = if valid {
+        let mut rank = 0usize;
         segments
             .iter()
             .filter_map(|seg| match seg {
                 Segment::Text(t) if !t.is_empty() => Some(make_text(t)),
+                Segment::Token(_) if tolerant => {
+                    // 容错路径：编号不可信，按出现顺序对位 refs
+                    let r = rank;
+                    rank += 1;
+                    Some(refs[r].inline.clone())
+                }
                 Segment::Token(idx) => Some(refs[*idx].inline.clone()),
                 _ => None,
             })
             .collect()
     } else {
-        // 降级：译文整段 Text + 资产按原序追加
-        let mut items = vec![make_text(translated_text.trim())];
+        // 降级：剥除字面令牌 + 译文整段 Text + 资产按原序追加
+        let mut items = vec![make_text(collapse_spaces(&strip_p_tokens(translated_text)).trim())];
         items.extend(refs.iter().map(|r| r.inline.clone()));
         items
     };
@@ -131,7 +182,7 @@ pub fn rebuild_paragraph(
             style: style.clone(),
             content: new_content,
         },
-        !valid,
+        !exact,
     )
 }
 
@@ -207,13 +258,16 @@ mod tests {
     }
 
     #[test]
-    fn degrade_when_unknown_token_index() {
+    fn tolerate_unknown_token_index_by_appearance() {
+        // v2.8：越界编号 + 数量一致 → 按出现顺序容错回填（仍标降级），资产不丢
         let orig = para(
             vec![InlineContent::InlineImage { resource_id: "r0_image".into() }],
             ParagraphStyle::default(),
         );
-        let (_, degraded) = rebuild_paragraph(&orig, "{{P5}} 越界", &refs(1));
+        let (rebuilt, degraded) = rebuild_paragraph(&orig, "越界 {{P5}}", &refs(1));
         assert!(degraded);
+        let Block::Paragraph { content, .. } = rebuilt else { panic!() };
+        assert!(matches!(content[1], InlineContent::InlineImage { .. }), "资产容错回填");
     }
 
     #[test]
@@ -260,5 +314,86 @@ mod tests {
         assert!(matches!(&content[0], InlineContent::Text { text, .. } if text == "公式"));
         assert!(matches!(&content[1], InlineContent::InlineFormula { .. }));
         assert!(matches!(&content[2], InlineContent::Text { text, .. } if text == "结束"));
+    }
+    #[test]
+    fn reorder_permutation_restores_by_number() {
+        // 模型按中文语序调整令牌位置（P2 提前）：排列完整 → 按编号还原
+        let orig = para(
+            vec![
+                InlineContent::Text { text: "src ".into(), bold: false, italic: false, underline: false },
+                InlineContent::InlineFormula { resource_id: "f0".into() },
+                InlineContent::InlineFormula { resource_id: "f1".into() },
+                InlineContent::InlineFormula { resource_id: "f2".into() },
+            ],
+            ParagraphStyle::default(),
+        );
+        let refs = [
+            PlaceholderRef { token: "{{P0}}".into(), inline: InlineContent::InlineFormula { resource_id: "f0".into() } },
+            PlaceholderRef { token: "{{P1}}".into(), inline: InlineContent::InlineFormula { resource_id: "f1".into() } },
+            PlaceholderRef { token: "{{P2}}".into(), inline: InlineContent::InlineFormula { resource_id: "f2".into() } },
+        ];
+        let (rebuilt, degraded) = rebuild_paragraph(&orig, "译文 {{P2}} 和 {{P0}} 及 {{P1}}", &refs);
+        assert!(!degraded);
+        let Block::Paragraph { content, .. } = rebuilt else { panic!() };
+        let ids: Vec<String> = content.iter().filter_map(|c| match c {
+            InlineContent::InlineFormula { resource_id } => Some(resource_id.clone()),
+            _ => None,
+        }).collect();
+        assert_eq!(ids, vec!["f2", "f0", "f1"], "按编号对位，非出现顺序");
+    }
+
+    #[test]
+    fn tolerant_restores_foreign_token_by_appearance_order() {
+        // 模型串号（{{P3}} 越界，实际只有 3 个资产）：数量一致且互不重复 → 按出现顺序容错
+        let orig = para(
+            vec![
+                InlineContent::Text { text: "src ".into(), bold: false, italic: false, underline: false },
+                InlineContent::InlineFormula { resource_id: "f0".into() },
+                InlineContent::InlineFormula { resource_id: "f1".into() },
+                InlineContent::InlineFormula { resource_id: "f2".into() },
+            ],
+            ParagraphStyle::default(),
+        );
+        let refs = [
+            PlaceholderRef { token: "{{P0}}".into(), inline: InlineContent::InlineFormula { resource_id: "f0".into() } },
+            PlaceholderRef { token: "{{P1}}".into(), inline: InlineContent::InlineFormula { resource_id: "f1".into() } },
+            PlaceholderRef { token: "{{P2}}".into(), inline: InlineContent::InlineFormula { resource_id: "f2".into() } },
+        ];
+        let (rebuilt, degraded) = rebuild_paragraph(&orig, "甲 {{P0}} 乙 {{P3}} 丙 {{P2}}", &refs);
+        assert!(degraded, "容错回填仍应标降级");
+        let Block::Paragraph { content, .. } = rebuilt else { panic!() };
+        let ids: Vec<String> = content.iter().filter_map(|c| match c {
+            InlineContent::InlineFormula { resource_id } => Some(resource_id.clone()),
+            _ => None,
+        }).collect();
+        assert_eq!(ids, vec!["f0", "f1", "f2"], "按出现顺序对位");
+        let dump = format!("{:?}", content);
+        assert!(!dump.contains("{{P"), "不应残留字面令牌");
+    }
+
+    #[test]
+    fn degrade_strips_literal_tokens() {
+        // 缺失令牌（数量不符）：剥除字面 {{Pn}}，不再把噪音交给用户
+        let orig = para(
+            vec![
+                InlineContent::Text { text: "src ".into(), bold: false, italic: false, underline: false },
+                InlineContent::InlineFormula { resource_id: "f0".into() },
+                InlineContent::InlineFormula { resource_id: "f1".into() },
+            ],
+            ParagraphStyle::default(),
+        );
+        let refs = [
+            PlaceholderRef { token: "{{P0}}".into(), inline: InlineContent::InlineFormula { resource_id: "f0".into() } },
+            PlaceholderRef { token: "{{P1}}".into(), inline: InlineContent::InlineFormula { resource_id: "f1".into() } },
+        ];
+        let (rebuilt, degraded) = rebuild_paragraph(&orig, "甲 {{P0}} 乙", &refs);
+        assert!(degraded);
+        let Block::Paragraph { content, .. } = rebuilt else { panic!() };
+        let first_text = match &content[0] {
+            InlineContent::Text { text, .. } => text.clone(),
+            _ => panic!("首段应为文本"),
+        };
+        assert_eq!(first_text, "甲 乙", "剥除令牌并折叠空格");
+        assert_eq!(content.len(), 3, "资产仍在段尾追加，内容不丢");
     }
 }

@@ -23,6 +23,56 @@ use crate::model::{
 pub use llm::{LlmClient, TranslateError};
 pub use prompt::{extract_source_text, PlaceholderRef};
 
+/// 进度事件的流式预览文本：剥除 `{{Pn}}`/`{{Mn}}` 占位令牌字面量。
+/// 预览可能因额度熔断/断流/切页被前端保留展示，绝不能携带令牌原文；
+/// 含行内资产的权威译文由 done 事件的重建结果提供。
+fn preview_text(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] == b'{' && text[i..].starts_with("{{") {
+            let j = i + 2;
+            let kind = bytes.get(j).copied();
+            if kind == Some(b'P') || kind == Some(b'M') {
+                let mut k = j + 1;
+                let mut num = String::new();
+                while k < bytes.len() && bytes[k].is_ascii_digit() {
+                    num.push(bytes[k] as char);
+                    k += 1;
+                }
+                if !num.is_empty() && text[k..].starts_with("}}") {
+                    i = k + 2;
+                    continue;
+                }
+            }
+        }
+        let ch_len = utf8_len(bytes[i]);
+        out.push_str(&text[i..i + ch_len]);
+        i += ch_len;
+    }
+    // 折叠剥除留下的连续空格（不动换行）
+    let mut folded = String::with_capacity(out.len());
+    let mut prev_space = false;
+    for c in out.chars() {
+        let sp = c == ' ';
+        if !(sp && prev_space) {
+            folded.push(c);
+        }
+        prev_space = sp;
+    }
+    folded.trim().to_string()
+}
+
+fn utf8_len(b: u8) -> usize {
+    match b {
+        0x00..=0x7F => 1,
+        0xC0..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        _ => 4,
+    }
+}
+
 /// 一个待翻译段落任务
 struct Task {
     idx: usize,
@@ -130,7 +180,7 @@ pub async fn translate_document(
                             current,
                             total,
                             status: ProgressStatus::Cached,
-                            translated_text: Some(cached),
+                            translated_text: Some(preview_text(&cached)),
                             error: None,
                         })
                         .await;
@@ -154,7 +204,7 @@ pub async fn translate_document(
                     current,
                     total,
                     status: ProgressStatus::Cached,
-                    translated_text: Some(cached),
+                    translated_text: Some(preview_text(&cached)),
                     error: None,
                 })
                 .await;
@@ -208,13 +258,17 @@ pub async fn translate_document(
                 translate_one(&tasks[0], &ctx).await;
                 return;
             }
-            // 合并请求（v2.2 T5：组内 M 令牌全局偏移编号，避免跨段冲突）
-            let mut offset = 0usize;
+            // 合并请求（v2.2 T5：组内 M 令牌全局偏移编号，避免跨段冲突；
+            // v2.8：P 资产令牌同机制全局编号——各段都从 {{P0}} 起号会诱导模型串号）
+            let mut m_offset = 0usize;
+            let mut p_offset = 0usize;
             let texts: Vec<String> = tasks
                 .iter()
                 .map(|t| {
-                    let s = math_slot::renumber_tokens(&t.source_text, offset);
-                    offset += t.math_slots.len();
+                    let s = prompt::renumber_p_tokens(&t.source_text, p_offset);
+                    p_offset += t.refs.len();
+                    let s = math_slot::renumber_tokens(&s, m_offset);
+                    m_offset += t.math_slots.len();
                     s
                 })
                 .collect();
@@ -226,15 +280,18 @@ pub async fn translate_document(
             };
             match merged_ok {
                 Some(parts) => {
-                    // 拆分成功后按各段原始偏移校验/回填 M 令牌
+                    // 拆分成功后按各段原始偏移校验/回填 M 令牌；P 令牌还原段内局部编号
                     let mut offset = 0usize;
+                    let mut p_offset = 0usize;
                     for (task, translated) in tasks.iter().zip(parts) {
+                        let localized = prompt::localize_p_tokens(&translated, p_offset);
+                        p_offset += task.refs.len();
                         let n_slots = task.math_slots.len();
                         let renumbered_src = math_slot::renumber_tokens(&task.source_text, offset);
                         let restored = if n_slots == 0 {
-                            translated
-                        } else if math_slot::verify(&renumbered_src, &translated) {
-                            math_slot::restore(&translated, &math_slot::padded_slots(&task.math_slots, offset))
+                            localized
+                        } else if math_slot::verify(&renumbered_src, &localized) {
+                            math_slot::restore(&localized, &math_slot::padded_slots(&task.math_slots, offset))
                         } else {
                             String::new() // 令牌损坏标记 → 独立重译
                         };
@@ -375,7 +432,7 @@ async fn translate_algorithm_task(task: &Task, ctx: &TaskCtx) {
                         current,
                         total: ctx.total,
                         status: ProgressStatus::Done,
-                        translated_text: Some(joined),
+                        translated_text: Some(preview_text(&joined)),
                         error: None,
                     })
                     .await;
@@ -527,8 +584,22 @@ async fn finish_task(task: &Task, translated: String, ctx: &TaskCtx) {
             current,
             total: ctx.total,
             status: ProgressStatus::Done,
-            translated_text: Some(translated),
+            translated_text: Some(preview_text(&translated)),
             error: None,
         })
         .await;
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::preview_text;
+
+    #[test]
+    fn strips_p_and_m_tokens_and_folds_spaces() {
+        assert_eq!(preview_text("甲 {{P0}} 乙 {{M12}} 丙"), "甲 乙 丙");
+        assert_eq!(preview_text("开头 {{P11}}"), "开头");
+        assert_eq!(preview_text("无令牌 保留 换行\n原样"), "无令牌 保留 换行\n原样");
+        // 非令牌花括号不受影响
+        assert_eq!(preview_text("集合 {{X}} 与 {P0} 保持"), "集合 {{X}} 与 {P0} 保持");
+    }
 }

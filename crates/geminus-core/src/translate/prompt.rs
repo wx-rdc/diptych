@@ -72,6 +72,62 @@ pub fn build_messages(source_text: &str, source_lang: &str, target_lang: &str) -
     ]
 }
 
+/// {{Pn}} 令牌 chunk 内全局重编号（v2.8）：每个段落令牌都从 {{P0}} 起号，
+/// 同一 chunk 的 prompt 里出现大量重名令牌会诱导模型串号（实测把 {{P3}}
+/// 写成相邻段的 {{P11}}）→ 整段令牌校验失败降级。全局唯一后模型无从串号。
+/// 仿 math_slot::renumber_tokens（M 令牌 v2.2 T5.2 同款机制）。
+pub fn renumber_p_tokens(text: &str, offset: usize) -> String {
+    if offset == 0 {
+        return text.to_string();
+    }
+    shift_p_tokens(text, |n| n + offset)
+}
+
+/// 全局编号还原为段内局部编号：{{Pn}} → {{P(n-offset)}}（n < offset 的外来令牌
+/// 原样保留，交由 rebuild 校验降级）
+pub fn localize_p_tokens(text: &str, offset: usize) -> String {
+    if offset == 0 {
+        return text.to_string();
+    }
+    shift_p_tokens(text, |n| n.checked_sub(offset).unwrap_or(n))
+}
+
+fn shift_p_tokens(text: &str, shift: impl Fn(usize) -> usize) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] == b'{' && text[i..].starts_with("{{P") {
+            let mut j = i + 3;
+            let mut num = String::new();
+            while j < bytes.len() && bytes[j].is_ascii_digit() {
+                num.push(bytes[j] as char);
+                j += 1;
+            }
+            if !num.is_empty() && text[j..].starts_with("}}") {
+                if let Ok(n) = num.parse::<usize>() {
+                    out.push_str(&format!("{{{{P{}}}}}", shift(n)));
+                    i = j + 2;
+                    continue;
+                }
+            }
+        }
+        let ch_len = utf8_len(bytes[i]);
+        out.push_str(&text[i..i + ch_len]);
+        i += ch_len;
+    }
+    out
+}
+
+fn utf8_len(b: u8) -> usize {
+    match b {
+        0x00..=0x7F => 1,
+        0xC0..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        _ => 4,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,5 +172,31 @@ mod tests {
         assert_eq!(msgs[0]["role"], "system");
         assert_eq!(msgs[1]["role"], "user");
         assert_eq!(msgs[1]["content"], "hello");
+    }
+
+    #[test]
+    fn p_token_renumber_localize_roundtrip() {
+        let src = "前 {{P0}} 中 {{P1}} 后 {{P2}}";
+        let global = renumber_p_tokens(src, 5);
+        assert_eq!(global, "前 {{P5}} 中 {{P6}} 后 {{P7}}");
+        assert_eq!(localize_p_tokens(&global, 5), src);
+    }
+
+    #[test]
+    fn localize_keeps_foreign_tokens_verbatim() {
+        // 编号小于偏移 = 其它段落的串号令牌：原样保留，交由 rebuild 校验降级
+        let t = "甲 {{P3}} 乙 {{P7}}";
+        assert_eq!(localize_p_tokens(t, 5), "甲 {{P3}} 乙 {{P2}}");
+    }
+
+    #[test]
+    fn renumber_zero_offset_is_identity() {
+        assert_eq!(renumber_p_tokens("a {{P3}} b", 0), "a {{P3}} b");
+    }
+
+    #[test]
+    fn renumber_leaves_non_token_text_alone() {
+        let src = "{P0} 不是令牌，{{P}} 也不是，{{P12}} 是";
+        assert_eq!(renumber_p_tokens(src, 1), "{P0} 不是令牌，{{P}} 也不是，{{P13}} 是");
     }
 }
