@@ -27,6 +27,9 @@ __pycache__/
 .DS_Store
 /.zcode
 
+# 版权论文原文（顶层 E2E 夹具）不入公开仓，本地自备；test/fixtures/ 仍照常跟踪
+test/*.pdf
+
 # worktree & local runtime artifacts
 app/node_modules
 logs_dev.txt
