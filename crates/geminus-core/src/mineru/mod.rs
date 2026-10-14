@@ -7,6 +7,7 @@ pub mod adapter;
 pub mod client;
 pub mod merger;
 pub mod raw;
+pub mod repair;
 pub mod splitter;
 
 use std::path::{Path, PathBuf};

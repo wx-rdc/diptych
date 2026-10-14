@@ -844,10 +844,16 @@ async fn parse_from_path(
                 return;
             }
         };
-        if let Some(doc) = cache.get_mineru_parse(&hash, geminus_core::cache::IR_SCHEMA_VERSION) {
+        if let Some(mut doc) = cache.get_mineru_parse(&hash, geminus_core::cache::IR_SCHEMA_VERSION) {
             let _ = stage_tx
                 .send(json!({ "stage": "cached", "message": "MinerU 解析结果缓存命中" }))
                 .await;
+            // v2.8：旧缓存可能含 U+FFFD 损坏文本 → 就地修复并回写
+            if repair_mineru_fffd(&mut doc, &path, &hash) {
+                let raw_root = cache.mineru_raw_root(&hash);
+                let _ = cache.put_mineru_parse(&hash, &doc, raw_root.as_deref(),
+                    geminus_core::cache::IR_SCHEMA_VERSION);
+            }
             // v2.4：解析不实扣（实扣在翻译循环）；预检已在解析前完成
             register_doc(&state2, &doc, &path, &hash, user2.as_deref(), &display_name2);
             let token = issue_doc_access(&state2, &doc.id, ip2.as_deref(), user2.is_some(), &display_name2);
@@ -861,11 +867,13 @@ async fn parse_from_path(
         if let Some(raw_root) = cache.mineru_raw_root(&hash) {
             let root = state2.mineru_cache_root.join(&raw_root);
             match mineru::reparse_from_dir(&root, &file_stem(&path)) {
-                Ok(doc) => {
+                Ok(mut doc) => {
                     let _ = stage_tx
                         .send(json!({ "stage": "replayed",
                             "message": "解析器已升级，从本地原始结果离线重放（零云端调用）" }))
                         .await;
+                    // v2.8：重放产物可能含 U+FFFD → 修复后再入缓存
+                    repair_mineru_fffd(&mut doc, &path, &hash);
                     let _ = cache.put_mineru_parse(&hash, &doc, Some(&raw_root),
                         geminus_core::cache::IR_SCHEMA_VERSION);
                     // v2.4：解析不实扣（实扣在翻译循环）
@@ -905,7 +913,7 @@ async fn parse_from_path(
             })
         .await;
 
-        let parsed = match result {
+        let mut parsed = match result {
             Ok(doc) => Some(doc),
             Err(e) => {
                 eprintln!("[mineru] 失败: {e}");
@@ -932,6 +940,14 @@ async fn parse_from_path(
             }
         };
 
+        // v2.8：MinerU 成功产物可能含 U+FFFD → 用同一裁剪件的内置解析回填
+        //（回退产物本就来自内置解析，无需修复）。缓存键随实际送解析的文件
+        //（裁剪件哈希 ≠ 原件哈希，各自独立缓存）。
+        let online_hash = TranslationCache::file_sha256(&parse_path).unwrap_or_else(|_| hash.clone());
+        if let Some(parsed_doc) = parsed.as_mut() {
+            repair_mineru_fffd(parsed_doc, &parse_path, &online_hash);
+        }
+
         // 成功或回退：builtin 兜底（回退场景；同样只解析裁剪件，保持额度内口径）+ 注册 + done
         let doc = parsed.or_else(|| match parse_any(&parse_path) {
             ParseOutcome::Ok(doc, _) => Some(doc),
@@ -939,8 +955,6 @@ async fn parse_from_path(
         });
         match doc {
             Some(doc) => {
-                // 缓存键随实际送解析的文件（裁剪件哈希 ≠ 原件哈希，各自独立缓存）
-                let online_hash = TranslationCache::file_sha256(&parse_path).unwrap_or_else(|_| hash.clone());
                 // v2.2 T1：在线解析成功 → raw 持久化（chunk 目录 + raw_meta）+ 版本化 IR 缓存
                 let raw_root = persist_mineru_raw(&state2, &work, &online_hash);
                 let _ = cache.put_mineru_parse(&online_hash, &doc, raw_root.as_deref(),
@@ -1025,6 +1039,82 @@ fn issue_doc_access(
 /// v2.2 T1：把 MinerU 在线解析的 work_dir（chunk_NN 解压目录）持久化到
 /// `mineru_cache_root/<hash>/`，写 raw_meta.json（含各片首页偏移，取自拆分结果）。
 /// 返回相对根目录的路径（写入 mineru_parses.raw_root）。失败仅日志降级（重放不可用时走在线）。
+/// MinerU 输出 U+FFFD 修复（v2.8）：MinerU 云端解析会把数学斜体字符（星面）
+/// 替换为 U+FFFD（其字形→Unicode 映射缺陷），LLM 原样保留导致译文乱码。
+/// 检出后用内置解析（同一 PDF，ToUnicode 提取完好）逐段回填；修复后仍有残余时
+/// 把上下文转储到 dump 目录并在日志注明路径，供持续分析改进。
+/// 返回是否发生了修复。
+fn repair_mineru_fffd(doc: &mut Document, pdf_path: &std::path::Path, file_hash: &str) -> bool {
+    if mineru::repair::count_fffd(doc) == 0 {
+        return false;
+    }
+    let reference = match geminus_core::parse_pdf(pdf_path) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("[mineru_repair] 检出 U+FFFD，但内置参考解析失败（{e}），跳过修复");
+            return false;
+        }
+    };
+    let stats = mineru::repair::repair_document(doc, &reference);
+    if stats.residual_runs == 0 {
+        eprintln!(
+            "[mineru_repair] 已回填 {} 处 FFFD（{} 轮）: {}",
+            stats.filled_runs,
+            stats.passes,
+            pdf_path.display()
+        );
+        return true;
+    }
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default();
+    let dump_path = repair_dump_dir()
+        .join(format!("fffd_{stamp}_{}.json", &file_hash[..file_hash.len().min(12)]));
+    let payload = json!({
+        "file": pdf_path.display().to_string(),
+        "file_hash": file_hash,
+        "filled_runs": stats.filled_runs,
+        "passes": stats.passes,
+        "residual_runs": stats.residual_runs,
+        "residual_contexts": stats.residual_contexts,
+    });
+    let body = serde_json::to_string_pretty(&payload).unwrap_or_default();
+    let write = std::fs::create_dir_all(dump_path.parent().unwrap_or(std::path::Path::new(".")))
+        .and_then(|_| std::fs::write(&dump_path, body));
+    match write {
+        Ok(_) => eprintln!(
+            "[mineru_repair] 回填 {} 处后仍残余 {} 处 FFFD，上下文已转储 {}（供持续分析改进）",
+            stats.filled_runs,
+            stats.residual_runs,
+            dump_path.display()
+        ),
+        Err(e) => eprintln!(
+            "[mineru_repair] 回填 {} 处后仍残余 {} 处 FFFD，转储写入失败（{e}）: {}",
+            stats.filled_runs,
+            stats.residual_runs,
+            dump_path.display()
+        ),
+    }
+    true
+}
+
+/// 转储目录：GEMINUS_REPAIR_DUMP_DIR → 缓存库同级 repair_dumps → data/repair_dumps
+fn repair_dump_dir() -> PathBuf {
+    if let Ok(d) = std::env::var("GEMINUS_REPAIR_DUMP_DIR") {
+        return PathBuf::from(d);
+    }
+    if let Ok(p) = std::env::var("GEMINUS_CACHE_PATH") {
+        let p = PathBuf::from(p);
+        if let Some(parent) = p.parent() {
+            if !parent.as_os_str().is_empty() {
+                return parent.join("repair_dumps");
+            }
+        }
+    }
+    PathBuf::from("data/repair_dumps")
+}
+
 fn persist_mineru_raw(state: &AppState, work_dir: &std::path::Path, file_hash: &str) -> Option<String> {
     let dest = state.mineru_cache_root.join(file_hash);
     let mut entries: Vec<serde_json::Value> = Vec::new();
